@@ -46,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   
                   const Text(
-                    'Login to your account', // Changed from "Login to your AMS account"
+                    'Login to yo account', // Changed from "Login to your AMS account"
                     style: TextStyle(color: Colors.black54),
                   ),
                   
