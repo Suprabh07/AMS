@@ -1,0 +1,47 @@
+# Flutter-related
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Android-related
+**/android/**/gradle-wrapper.jar
+**/android/.gradle
+**/android/captures/
+**/android/gradle/
+**/android/local.properties
+**/android/bundle/
+**/android/app/src/main/res/drawable-xxhdpi/ic_launcher.png
+**/android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+**/android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+**/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+**/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+**/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+# iOS-related
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/flutter_settings.xcconfig
+**/ios/Runner/Generated.xcconfig
+**/ios/Runner/Info.plist
+**/ios/Pods/
+**/ios/.symlinks/
+
+# IntelliJ-related
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Other
+.DS_Store
+.history
+.svn
+*.log
+*.swp
+*.bak
+*.tmp
+*.temp
