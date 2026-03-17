@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'signup_screen.dart';
+import 'user_role.dart';
+import 'student_dashboard.dart'; // Assuming this exists
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -10,32 +15,121 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  UserRole _selectedRole = UserRole.student;
+  bool _isLoading = false;
+
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all fields')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Sign in with Email and Password
+      UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      // 2. Fetch User Data from Firestore to verify role
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get();
+
+      if (userDoc.exists) {
+        String roleInDb = userDoc.get('role');
+        if (roleInDb == _selectedRole.name) {
+          // Success: Navigate to respective dashboard
+          if (mounted) {
+            if (_selectedRole == UserRole.student) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const StudentDashboard()),
+              );
+            } else {
+              // Navigate to Teacher Dashboard (to be created)
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Teacher Dashboard coming soon!')),
+              );
+            }
+          }
+        } else {
+          // Role mismatch
+          await FirebaseAuth.instance.signOut();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('User is not registered as a ${_selectedRole.name}')),
+            );
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('User record not found')),
+          );
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Authentication failed')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email to reset password')),
+      );
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password reset link sent to your email')),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'An error occurred')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // Background
           Image.asset(
             'assets/background.png',
             fit: BoxFit.cover,
             width: double.infinity,
             height: double.infinity,
           ),
-          
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 30.0),
               child: Column(
                 children: [
                   const SizedBox(height: 50),
-                  
-                  // Logo
                   Image.asset('assets/logo.png', height: 120),
-                  
                   const SizedBox(height: 20),
-                  
                   const Text(
                     'Welcome Back',
                     style: TextStyle(
@@ -44,17 +138,49 @@ class _LoginScreenState extends State<LoginScreen> {
                       color: Color(0xFF2C3E50),
                     ),
                   ),
-                  
                   const Text(
-                    'Login to your account', // Changed from "Login to your AMS account"
+                    'Login to your account',
                     style: TextStyle(color: Colors.black54),
                   ),
-                  
-                  const SizedBox(height: 50),
-                  
-                  // Email Field
+                  const SizedBox(height: 30),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedRole = UserRole.student),
+                        child: Row(
+                          children: [
+                            Radio<UserRole>(
+                              value: UserRole.student,
+                              groupValue: _selectedRole,
+                              onChanged: (v) => setState(() => _selectedRole = v!),
+                              activeColor: const Color(0xFF1A5F7A),
+                            ),
+                            const Text('Student'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 20),
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedRole = UserRole.teacher),
+                        child: Row(
+                          children: [
+                            Radio<UserRole>(
+                              value: UserRole.teacher,
+                              groupValue: _selectedRole,
+                              onChanged: (v) => setState(() => _selectedRole = v!),
+                              activeColor: const Color(0xFF1A5F7A),
+                            ),
+                            const Text('Teacher'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
                   TextField(
                     controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
                       hintText: 'Email',
                       filled: true,
@@ -66,10 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  
                   const SizedBox(height: 20),
-                  
-                  // Password Field
                   TextField(
                     controller: _passwordController,
                     obscureText: true,
@@ -84,25 +207,19 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {},
+                      onPressed: _forgotPassword,
                       child: const Text('Forgot Password?'),
                     ),
                   ),
-                  
                   const SizedBox(height: 30),
-                  
-                  // Login Button
                   SizedBox(
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
-                      onPressed: () {
-                        // Handle Login
-                      },
+                      onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1A5F7A),
                         foregroundColor: Colors.white,
@@ -111,23 +228,25 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         elevation: 5,
                       ),
-                      child: const Text(
-                        'LOGIN',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'LOGIN',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
                     ),
                   ),
-                  
                   const SizedBox(height: 20),
-                  
-                  // Signup Link
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text("Don't have an account?"),
                       TextButton(
                         onPressed: () {
-                          // TODO: Navigate to Signup Screen
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SignupScreen()),
+                          );
                         },
                         child: const Text(
                           'Sign Up',
