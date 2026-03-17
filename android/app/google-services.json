@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "390125420903",
+    "project_id": "bmsce-ams",
+    "storage_bucket": "bmsce-ams.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:390125420903:android:9ee53231457e3e8cd22fc2",
+        "android_client_info": {
+          "package_name": "com.example.ams_bmsce"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIBbYPityMSxo8VHc0A37NIh_8koSiVZ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
