@@ -6,6 +6,9 @@
 .pub/
 /build/
 
+# Firebase config (Security: Do not push API keys to public repos)
+lib/firebase_options.dart
+
 # Android-related
 **/android/**/gradle-wrapper.jar
 **/android/.gradle
