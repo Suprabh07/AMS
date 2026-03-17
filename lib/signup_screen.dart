@@ -146,7 +146,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                        hintText: 'Email (e.g. name.dept24@bmsce.ac.in)',
+                        hintText: 'Email',
                         filled: true,
                         fillColor: Colors.white.withAlpha(230),
                         prefixIcon: const Icon(Icons.email_outlined),
