@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'login_screen.dart';
+import 'student_dashboard.dart';
+import 'user_role.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,31 +27,81 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1A5F7A)),
         useMaterial3: true,
       ),
-      home: const LoadingScreen(),
+      home: const AuthWrapper(),
     );
   }
 }
 
-class LoadingScreen extends StatefulWidget {
-  const LoadingScreen({super.key});
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  Future<UserRole?> _getUserRole(String email) async {
+    // Check students collection
+    final studentQuery = await FirebaseFirestore.instance
+        .collection('students')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+    
+    if (studentQuery.docs.isNotEmpty) {
+      return UserRole.student;
+    }
+
+    // Check teachers collection
+    final teacherQuery = await FirebaseFirestore.instance
+        .collection('teachers')
+        .where('email', isEqualTo: email)
+        .limit(1)
+        .get();
+    
+    if (teacherQuery.docs.isNotEmpty) {
+      return UserRole.teacher;
+    }
+
+    return null;
+  }
 
   @override
-  State<LoadingScreen> createState() => _LoadingScreenState();
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingScreen();
+        }
+        
+        if (snapshot.hasData && snapshot.data != null) {
+          // User is logged in, determine role by searching collections
+          return FutureBuilder<UserRole?>(
+            future: _getUserRole(snapshot.data!.email!),
+            builder: (context, roleSnapshot) {
+              if (roleSnapshot.connectionState == ConnectionState.waiting) {
+                return const LoadingScreen();
+              }
+              
+              if (roleSnapshot.hasData && roleSnapshot.data != null) {
+                if (roleSnapshot.data == UserRole.student) {
+                  return const StudentDashboard();
+                } else if (roleSnapshot.data == UserRole.teacher) {
+                  return const Scaffold(body: Center(child: Text("Teacher Dashboard coming soon")));
+                }
+              }
+              
+              // If role not found in either collection, sign out and go to login
+              FirebaseAuth.instance.signOut();
+              return const LoginScreen();
+            },
+          );
+        }
+        
+        return const LoginScreen();
+      },
+    );
+  }
 }
 
-class _LoadingScreenState extends State<LoadingScreen> {
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    });
-  }
+class LoadingScreen extends StatelessWidget {
+  const LoadingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
