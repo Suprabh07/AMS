@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'signup_screen.dart';
+import 'forgot_password_screen.dart';
 import 'user_role.dart';
 import 'student_dashboard.dart';
 
@@ -32,10 +33,8 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Sign in with Firebase Auth
       await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
 
-      // 2. Search for the user in the selected collection by EMAIL
       final collectionName = _selectedRole == UserRole.student ? 'students' : 'teachers';
       final querySnapshot = await FirebaseFirestore.instance
           .collection(collectionName)
@@ -43,7 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
           .get();
 
       if (querySnapshot.docs.isNotEmpty) {
-        // Success: Found the email in the correct collection
         if (mounted) {
           if (_selectedRole == UserRole.student) {
             Navigator.pushReplacement(
@@ -57,7 +55,6 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       } else {
-        // Role mismatch or record missing in that specific collection
         await FirebaseAuth.instance.signOut();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -73,31 +70,6 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _forgotPassword() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email to reset password')),
-      );
-      return;
-    }
-
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password reset link sent to your email')),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'An error occurred')),
-        );
-      }
     }
   }
 
@@ -139,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                         hintText: 'Email',
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.9),
+                        fillColor: Colors.white.withAlpha(230),
                         prefixIcon: const Icon(Icons.person_outline),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none)),
                   ),
@@ -150,13 +122,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: InputDecoration(
                         hintText: 'Password',
                         filled: true,
-                        fillColor: Colors.white.withOpacity(0.9),
+                        fillColor: Colors.white.withAlpha(230),
                         prefixIcon: const Icon(Icons.lock_outline),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none)),
                   ),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(onPressed: _forgotPassword, child: const Text('Forgot Password?')),
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+                        );
+                      },
+                      child: const Text('Forgot Password?'),
+                    ),
                   ),
                   const SizedBox(height: 30),
                   SizedBox(
