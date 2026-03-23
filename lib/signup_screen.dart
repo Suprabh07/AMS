@@ -46,20 +46,33 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      UserCredential userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
+      // 1. Check if the email exists in the database first
+      // We check the collection based on the selected role
+      final collectionName = _selectedRole == UserRole.student ? 'students' : 'teachers';
+      
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection(collectionName)
+          .where('email', isEqualTo: email)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Registration failed: Email not authorized as a ${_selectedRole.name}. Please contact admin.')),
+          );
+        }
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 2. Email exists, proceed with creating user in Firebase Auth
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .set({
-        'email': email,
-        'role': _selectedRole.name,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
+      // Note: We are NOT adding any record to Firestore here as per your request.
+      // You will need to manually update the documents in Firestore with the new User UID if needed.
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -146,7 +159,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
-                        hintText: 'Email',
+                        hintText: 'Email (@bmsce.ac.in)',
                         filled: true,
                         fillColor: Colors.white.withAlpha(230),
                         prefixIcon: const Icon(Icons.email_outlined),
