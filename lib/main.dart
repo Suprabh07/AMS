@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 import 'login_screen.dart';
 import 'student_dashboard.dart';
+import 'teacher_dashboard.dart';
 import 'user_role.dart';
 
 void main() async {
@@ -83,7 +84,7 @@ class AuthWrapper extends StatelessWidget {
                 if (roleSnapshot.data == UserRole.student) {
                   return const StudentDashboard();
                 } else if (roleSnapshot.data == UserRole.teacher) {
-                  return const Scaffold(body: Center(child: Text("Teacher Dashboard coming soon")));
+                  return const TeacherDashboard();
                 }
               }
               
@@ -146,7 +147,7 @@ class LoadingScreen extends StatelessWidget {
                     color: Color(0xFF1A5F7A),
                   ),
                   SizedBox(height: 20),
-                  Text(
+                  const Text(
                     'Loading....',
                     style: TextStyle(
                       fontSize: 16,

@@ -16,6 +16,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   UserRole _selectedRole = UserRole.student;
   bool _isLoading = false;
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
 
   Future<void> _signUp() async {
     final email = _emailController.text.trim();
@@ -46,8 +48,6 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Check if the email exists in the database first
-      // We check the collection based on the selected role
       final collectionName = _selectedRole == UserRole.student ? 'students' : 'teachers';
       
       final querySnapshot = await FirebaseFirestore.instance
@@ -65,14 +65,10 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
 
-      // 2. Email exists, proceed with creating user in Firebase Auth
       await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-
-      // Note: We are NOT adding any record to Firestore here as per your request.
-      // You will need to manually update the documents in Firestore with the new User UID if needed.
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -122,35 +118,9 @@ class _SignupScreenState extends State<SignupScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      GestureDetector(
-                        onTap: () => setState(() => _selectedRole = UserRole.student),
-                        child: Row(
-                          children: [
-                            Radio<UserRole>(
-                              value: UserRole.student,
-                              groupValue: _selectedRole,
-                              onChanged: (v) => setState(() => _selectedRole = v!),
-                              activeColor: const Color(0xFF1A5F7A),
-                            ),
-                            const Text('Student'),
-                          ],
-                        ),
-                      ),
+                      _roleRadio(UserRole.student, 'Student'),
                       const SizedBox(width: 20),
-                      GestureDetector(
-                        onTap: () => setState(() => _selectedRole = UserRole.teacher),
-                        child: Row(
-                          children: [
-                            Radio<UserRole>(
-                              value: UserRole.teacher,
-                              groupValue: _selectedRole,
-                              onChanged: (v) => setState(() => _selectedRole = v!),
-                              activeColor: const Color(0xFF1A5F7A),
-                            ),
-                            const Text('Teacher'),
-                          ],
-                        ),
-                      ),
+                      _roleRadio(UserRole.teacher, 'Teacher'),
                     ],
                   ),
                   
@@ -170,12 +140,23 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 20),
                   TextField(
                     controller: _passwordController,
-                    obscureText: true,
+                    obscureText: !_isPasswordVisible,
                     decoration: InputDecoration(
                         hintText: 'Password',
                         filled: true,
                         fillColor: Colors.white.withAlpha(230),
                         prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                            color: const Color(0xFF1A5F7A),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isPasswordVisible = !_isPasswordVisible;
+                            });
+                          },
+                        ),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(15),
                             borderSide: BorderSide.none)),
@@ -183,12 +164,23 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 20),
                   TextField(
                     controller: _confirmPasswordController,
-                    obscureText: true,
+                    obscureText: !_isConfirmPasswordVisible,
                     decoration: InputDecoration(
                         hintText: 'Confirm Password',
                         filled: true,
                         fillColor: Colors.white.withAlpha(230),
                         prefixIcon: const Icon(Icons.lock_reset_outlined),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isConfirmPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                            color: const Color(0xFF1A5F7A),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                            });
+                          },
+                        ),
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(15),
                             borderSide: BorderSide.none)),
@@ -227,6 +219,23 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _roleRadio(UserRole role, String label) {
+    return GestureDetector(
+      onTap: () => setState(() => _selectedRole = role),
+      child: Row(
+        children: [
+          Radio<UserRole>(
+            value: role,
+            groupValue: _selectedRole,
+            onChanged: (v) => setState(() => _selectedRole = v!),
+            activeColor: const Color(0xFF1A5F7A),
+          ),
+          Text(label),
         ],
       ),
     );
