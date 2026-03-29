@@ -58,31 +58,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
         ),
         child: BottomNavigationBar(
           items: const <BottomNavigationBarItem>[
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.book_outlined),
-              activeIcon: Icon(Icons.book),
-              label: 'Courses',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today_outlined),
-              activeIcon: Icon(Icons.calendar_today),
-              label: 'Attendance',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_turned_in_outlined),
-              activeIcon: Icon(Icons.assignment_turned_in),
-              label: 'Marks',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.home_outlined), activeIcon: Icon(Icons.home), label: 'Home'),
+            BottomNavigationBarItem(icon: Icon(Icons.book_outlined), activeIcon: Icon(Icons.book), label: 'Courses'),
+            BottomNavigationBarItem(icon: Icon(Icons.calendar_today_outlined), activeIcon: Icon(Icons.calendar_today), label: 'Attendance'),
+            BottomNavigationBarItem(icon: Icon(Icons.assignment_turned_in_outlined), activeIcon: Icon(Icons.assignment_turned_in), label: 'Marks'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline), activeIcon: Icon(Icons.person), label: 'Profile'),
           ],
           currentIndex: _selectedIndex,
           selectedItemColor: const Color(0xFF1A5F7A),
@@ -119,36 +99,35 @@ class StudentHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
           .collection('students')
           .where('email', isEqualTo: user?.email)
-          .get(),
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("Error loading dashboard"));
+        if (snapshot.hasError) {
+          return Center(child: Text("Error: ${snapshot.error}"));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("Student record not found"));
         }
 
         var userData = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+        String? profileUrl = userData['profile_url'];
 
         return SafeArea(
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Custom Header with Lighter Gradient
                 Container(
                   decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF4A90A4), // Lightened version of 1A5F7A
-                        Color(0xFFA5E7EF), // Lightened version of 80DEEA
-                      ],
+                    image: DecorationImage(
+                      image: AssetImage('assets/Top_Background.jpg'),
+                      fit: BoxFit.cover,
                     ),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
@@ -156,54 +135,48 @@ class StudentHome extends StatelessWidget {
                     children: [
                       Image.asset('assets/logo.png', height: 40),
                       const SizedBox(width: 10),
-                      const Text(
-                        'BMSCE',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
+                      const Text('BMSCE', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                       const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.notifications_none, size: 28, color: Colors.white),
-                        onPressed: () {},
-                      ),
+                      IconButton(icon: const Icon(Icons.notifications_none, size: 28, color: Colors.white), onPressed: () {}),
                     ],
                   ),
                 ),
 
-                // Profile Card
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
                   child: Row(
                     children: [
-                      const CircleAvatar(
+                      CircleAvatar(
                         radius: 35,
-                        backgroundColor: Color(0xFFE2E8F0),
-                        child: Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A)),
+                        backgroundColor: const Color(0xFFE2E8F0),
+                        child: ClipOval(
+                          child: (profileUrl != null && profileUrl.toString().trim().isNotEmpty)
+                              ? Image.network(
+                                  profileUrl.toString().trim(),
+                                  width: 70,
+                                  height: 70,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A));
+                                  },
+                                  loadingBuilder: (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                  },
+                                )
+                              : const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A)),
+                        ),
                       ),
                       const SizedBox(width: 15),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              '${userData['name'] ?? 'Student'}',
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF2C3E50),
-                              ),
-                            ),
+                            Text(userData['name'] ?? 'Student', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
                             const SizedBox(height: 5),
                             Text(
                               'USN: ${userData['usn'] ?? 'N/A'} | ${userData['department_id'] ?? 'Dept'} | Sem: ${userData['semester_id'] ?? 'N/A'} | Sec: ${userData['section'] ?? 'N/A'}',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                color: Colors.black54,
-                                fontWeight: FontWeight.w500,
-                              ),
+                              style: const TextStyle(fontSize: 15, color: Colors.black54, fontWeight: FontWeight.w500),
                             ),
                           ],
                         ),
@@ -211,7 +184,6 @@ class StudentHome extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 20),
               ],
             ),
@@ -225,16 +197,54 @@ class StudentHome extends StatelessWidget {
 class StudentProfile extends StatelessWidget {
   const StudentProfile({super.key});
 
+  void _showFullImage(BuildContext context, String? imageUrl) {
+    if (imageUrl == null || imageUrl.isEmpty) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(10),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              panEnabled: true,
+              boundaryMargin: const EdgeInsets.all(20),
+              minScale: 0.5,
+              maxScale: 4,
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const Center(child: CircularProgressIndicator(color: Colors.white));
+                },
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
 
-    return FutureBuilder<QuerySnapshot>(
-      future: FirebaseFirestore.instance
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
           .collection('students')
           .where('email', isEqualTo: user?.email)
-          .limit(1)
-          .get(),
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -244,14 +254,46 @@ class StudentProfile extends StatelessWidget {
         }
 
         var userData = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+        String? profileUrl = userData['profile_url'];
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(25.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: GestureDetector(
+                  onTap: () => _showFullImage(context, profileUrl),
+                  child: Hero(
+                    tag: 'profile_pic',
+                    child: CircleAvatar(
+                      radius: 60, // Slightly larger
+                      backgroundColor: const Color(0xFFE2E8F0),
+                      child: ClipOval(
+                        child: (profileUrl != null && profileUrl.toString().trim().isNotEmpty)
+                            ? Image.network(
+                                profileUrl.toString().trim(),
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(Icons.account_circle, size: 120, color: Color(0xFF1A5F7A));
+                                },
+                              )
+                            : const Icon(Icons.account_circle, size: 120, color: Color(0xFF1A5F7A)),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               const Center(
-                child: Icon(Icons.account_circle, size: 100, color: Color(0xFF1A5F7A)),
+                child: Padding(
+                  padding: EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    "Tap to view photo",
+                    style: TextStyle(fontSize: 12, color: Colors.black45),
+                  ),
+                ),
               ),
               const SizedBox(height: 30),
               _infoSection("Name", userData['name'] ?? 'N/A'),
@@ -271,23 +313,9 @@ class StudentProfile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.black54,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(label, style: const TextStyle(fontSize: 14, color: Colors.black54, fontWeight: FontWeight.w500)),
           const SizedBox(height: 5),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF2C3E50),
-            ),
-          ),
+          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
           const Divider(thickness: 1),
         ],
       ),
