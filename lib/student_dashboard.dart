@@ -14,7 +14,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   final List<Widget> _pages = [
     const StudentHome(),
-    const Center(child: Text('Courses Screen', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+    const StudentCourses(),
     const Center(child: Text('Attendance Screen', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
     const Center(child: Text('Marks Screen', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
     const StudentProfile(),
@@ -29,22 +29,48 @@ class _StudentDashboardState extends State<StudentDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _selectedIndex == 0 
-        ? null 
-        : AppBar(
-            title: Text(_getAppBarTitle()),
-            backgroundColor: const Color(0xFF1A5F7A),
-            foregroundColor: Colors.white,
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                },
+      body: Column(
+        children: [
+          // Persistent Header for all tabs
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/Top_Background.jpg'),
+                fit: BoxFit.cover,
               ),
-            ],
+            ),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 10.0,
+              bottom: 10.0,
+              left: 20.0,
+              right: 10.0,
+            ),
+            child: Row(
+              children: [
+                Image.asset('assets/logo.png', height: 40),
+                const SizedBox(width: 10),
+                Text(
+                  _getAppBarTitle(),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.notifications_none, size: 26, color: Colors.white),
+                  onPressed: () {},
+                ),
+              ],
+            ),
           ),
-      body: _pages[_selectedIndex],
+          // Page Content
+          Expanded(
+            child: _pages[_selectedIndex],
+          ),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -82,11 +108,11 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   String _getAppBarTitle() {
     switch (_selectedIndex) {
-      case 0: return 'BMSCE Dashboard';
+      case 0: return 'BMSCE';
       case 1: return 'My Courses';
       case 2: return 'Attendance';
       case 3: return 'Marks Cards';
-      case 4: return 'Student Profile';
+      case 4: return 'Profile';
       default: return 'BMSCE';
     }
   }
@@ -108,86 +134,123 @@ class StudentHome extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
-          return Center(child: Text("Error: ${snapshot.error}"));
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("Student record not found"));
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("Error loading data"));
         }
 
         var userData = snapshot.data!.docs.first.data() as Map<String, dynamic>;
         String? profileUrl = userData['profile_url'];
 
-        return SafeArea(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  decoration: const BoxDecoration(
-                    image: DecorationImage(
-                      image: AssetImage('assets/Top_Background.jpg'),
-                      fit: BoxFit.cover,
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 35,
+                      backgroundColor: const Color(0xFFE2E8F0),
+                      child: ClipOval(
+                        child: (profileUrl != null && profileUrl.toString().trim().isNotEmpty)
+                            ? Image.network(
+                                profileUrl.toString().trim(),
+                                width: 70,
+                                height: 70,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A));
+                                },
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                                },
+                              )
+                            : const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A)),
+                      ),
                     ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
-                  child: Row(
-                    children: [
-                      Image.asset('assets/logo.png', height: 40),
-                      const SizedBox(width: 10),
-                      const Text('BMSCE', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
-                      const Spacer(),
-                      IconButton(icon: const Icon(Icons.notifications_none, size: 28, color: Colors.white), onPressed: () {}),
-                    ],
-                  ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 35,
-                        backgroundColor: const Color(0xFFE2E8F0),
-                        child: ClipOval(
-                          child: (profileUrl != null && profileUrl.toString().trim().isNotEmpty)
-                              ? Image.network(
-                                  profileUrl.toString().trim(),
-                                  width: 70,
-                                  height: 70,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A));
-                                  },
-                                  loadingBuilder: (context, child, loadingProgress) {
-                                    if (loadingProgress == null) return child;
-                                    return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                                  },
-                                )
-                              : const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A)),
-                        ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(userData['name'] ?? 'Student', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+                          const SizedBox(height: 5),
+                          Text(
+                            'USN: ${userData['usn'] ?? 'N/A'} | ${userData['department_id'] ?? 'Dept'} | Sem: ${userData['semester_id'] ?? 'N/A'} | Sec: ${userData['section'] ?? 'N/A'}',
+                            style: const TextStyle(fontSize: 15, color: Colors.black54, fontWeight: FontWeight.w500),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(userData['name'] ?? 'Student', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
-                            const SizedBox(height: 5),
-                            Text(
-                              'USN: ${userData['usn'] ?? 'N/A'} | ${userData['department_id'] ?? 'Dept'} | Sem: ${userData['semester_id'] ?? 'N/A'} | Sec: ${userData['section'] ?? 'N/A'}',
-                              style: const TextStyle(fontSize: 15, color: Colors.black54, fontWeight: FontWeight.w500),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-              ],
-            ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
+        );
+      },
+    );
+  }
+}
+
+class StudentCourses extends StatelessWidget {
+  const StudentCourses({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('courses').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text("Error: ${snapshot.error}"));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("No courses available"));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(15.0),
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            var course = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 15.0),
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(15.0),
+                title: Text(
+                  course['course_name'] ?? 'Unknown Course',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 5),
+                    Text("Code: ${course['course_code'] ?? 'N/A'}", style: const TextStyle(color: Colors.black54)),
+                    Text("Credits: ${course['credits'] ?? 'N/A'}", style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.w600)),
+                  ],
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A5F7A).withAlpha(30),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    "Sem ${course['semester_id'] ?? '-'}",
+                    style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -208,23 +271,43 @@ class StudentProfile extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            InteractiveViewer(
-              panEnabled: true,
-              boundaryMargin: const EdgeInsets.all(20),
-              minScale: 0.5,
-              maxScale: 4,
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.contain,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const Center(child: CircularProgressIndicator(color: Colors.white));
-                },
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                color: Colors.transparent,
+                width: double.infinity,
+                height: double.infinity,
+              ),
+            ),
+            SizedBox(
+              width: MediaQuery.of(context).size.width * 0.85,
+              height: MediaQuery.of(context).size.width * 0.85,
+              child: ClipOval(
+                child: Container(
+                  color: Colors.white,
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    boundaryMargin: const EdgeInsets.all(20),
+                    minScale: 0.5,
+                    maxScale: 4,
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return const Center(child: CircularProgressIndicator(color: Color(0xFF1A5F7A)));
+                      },
+                      errorBuilder: (context, error, stackTrace) => const Center(
+                        child: Icon(Icons.error, color: Colors.red, size: 50),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             Positioned(
-              top: 10,
-              right: 10,
+              top: 40,
+              right: 20,
               child: IconButton(
                 icon: const Icon(Icons.close, color: Colors.white, size: 30),
                 onPressed: () => Navigator.pop(context),
@@ -300,6 +383,24 @@ class StudentProfile extends StatelessWidget {
               _infoSection("USN", userData['usn'] ?? 'N/A'),
               _infoSection("Email", userData['email'] ?? 'N/A'),
               _infoSection("Section", userData['section'] ?? 'N/A'),
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await FirebaseAuth.instance.signOut();
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text("Logout", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
             ],
           ),
         );
