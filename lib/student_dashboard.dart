@@ -15,7 +15,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
   final List<Widget> _pages = [
     const StudentHome(),
     const StudentCourses(),
-    const Center(child: Text('Attendance Screen', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+    const StudentAttendance(),
     const Center(child: Text('Marks Screen', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
     const StudentProfile(),
   ];
@@ -201,58 +201,274 @@ class StudentCourses extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('courses').snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+      stream: FirebaseFirestore.instance
+          .collection('students')
+          .where('email', isEqualTo: user?.email)
+          .snapshots(),
+      builder: (context, studentSnapshot) {
+        if (studentSnapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError) {
-          return Center(child: Text("Error: ${snapshot.error}"));
-        }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("No courses available"));
+        if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("Student data not found"));
         }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(15.0),
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            var course = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-            return Card(
-              margin: const EdgeInsets.only(bottom: 15.0),
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.all(15.0),
-                title: Text(
-                  course['course_name'] ?? 'Unknown Course',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 5),
-                    Text("Code: ${course['course_code'] ?? 'N/A'}", style: const TextStyle(color: Colors.black54)),
-                    Text("Credits: ${course['credits'] ?? 'N/A'}", style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.w600)),
-                  ],
-                ),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A5F7A).withAlpha(30),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
+        var studentData = studentSnapshot.data!.docs.first.data() as Map<String, dynamic>;
+        String dept = studentData['department_id'] ?? '';
+        String sem = studentData['semester_id'] ?? '';
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('courses')
+              .where('department_id', isEqualTo: dept)
+              .where('semester_id', isEqualTo: sem)
+              .snapshots(),
+          builder: (context, courseSnapshot) {
+            if (courseSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (courseSnapshot.hasError) {
+              return Center(child: Text("Error: ${courseSnapshot.error}"));
+            }
+            if (!courseSnapshot.hasData || courseSnapshot.data!.docs.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(20.0),
                   child: Text(
-                    "Sem ${course['semester_id'] ?? '-'}",
-                    style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.bold),
+                    "No courses found for your department and semester.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.black54),
                   ),
                 ),
-              ),
+              );
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(15.0),
+              itemCount: courseSnapshot.data!.docs.length,
+              itemBuilder: (context, index) {
+                var course = courseSnapshot.data!.docs[index].data() as Map<String, dynamic>;
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 15.0),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(15.0),
+                    title: Text(
+                      course['course_name'] ?? 'Unknown Course',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 5),
+                        Text("Code: ${course['course_code'] ?? 'N/A'}", style: const TextStyle(color: Colors.black54)),
+                        Text("Credits: ${course['credits'] ?? 'N/A'}", style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A5F7A).withAlpha(30),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        "Credits: ${course['credits'] ?? '-'}",
+                        style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                );
+              },
             );
           },
         );
       },
+    );
+  }
+}
+
+class StudentAttendance extends StatelessWidget {
+  const StudentAttendance({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('students')
+          .where('email', isEqualTo: user?.email)
+          .snapshots(),
+      builder: (context, studentSnapshot) {
+        if (studentSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("Student data not found"));
+        }
+
+        var studentData = studentSnapshot.data!.docs.first.data() as Map<String, dynamic>;
+        String usn = studentData['usn'] ?? '';
+        String dept = studentData['department_id'] ?? '';
+        String sem = studentData['semester_id'] ?? '';
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('courses')
+              .where('department_id', isEqualTo: dept)
+              .where('semester_id', isEqualTo: sem)
+              .snapshots(),
+          builder: (context, courseSnapshot) {
+            if (courseSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!courseSnapshot.hasData || courseSnapshot.data!.docs.isEmpty) {
+              return const Center(child: Text("No courses found"));
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(15.0),
+              itemCount: courseSnapshot.data!.docs.length,
+              itemBuilder: (context, index) {
+                var course = courseSnapshot.data!.docs[index].data() as Map<String, dynamic>;
+                String courseCode = course['course_code'] ?? '';
+                String courseName = course['course_name'] ?? '';
+
+                return StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('attendance')
+                      .where('usn', isEqualTo: usn)
+                      .where('course_code', isEqualTo: courseCode)
+                      .snapshots(),
+                  builder: (context, attendanceSnapshot) {
+                    double percentage = 0.0;
+                    if (attendanceSnapshot.hasData && attendanceSnapshot.data!.docs.isNotEmpty) {
+                      int totalClasses = attendanceSnapshot.data!.docs.length;
+                      int presentClasses = attendanceSnapshot.data!.docs
+                          .where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present')
+                          .length;
+                      percentage = (presentClasses / totalClasses) * 100;
+                    }
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 15.0),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      child: ListTile(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => AttendanceDetailScreen(
+                                courseName: courseName,
+                                courseCode: courseCode,
+                                usn: usn,
+                              ),
+                            ),
+                          );
+                        },
+                        contentPadding: const EdgeInsets.all(15.0),
+                        title: Text(
+                          courseName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        ),
+                        subtitle: Text("Code: $courseCode", style: const TextStyle(color: Colors.black54)),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              "${percentage.toStringAsFixed(1)}%",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                                color: percentage >= 75 ? Colors.green : Colors.red,
+                              ),
+                            ),
+                            const Text("Attendance", style: TextStyle(fontSize: 10)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class AttendanceDetailScreen extends StatelessWidget {
+  final String courseName;
+  final String courseCode;
+  final String usn;
+
+  const AttendanceDetailScreen({
+    super.key,
+    required this.courseName,
+    required this.courseCode,
+    required this.usn,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(courseName),
+        backgroundColor: const Color(0xFF1A5F7A),
+        foregroundColor: Colors.white,
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('attendance')
+            .where('usn', isEqualTo: usn)
+            .where('course_code', isEqualTo: courseCode)
+            .orderBy('date', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("No attendance records found."));
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(15.0),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              var data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+              bool isPresent = data['status'] == 'Present';
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 10.0),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                child: ListTile(
+                  leading: Icon(
+                    isPresent ? Icons.check_circle : Icons.cancel,
+                    color: isPresent ? Colors.green : Colors.red,
+                  ),
+                  title: Text(data['date'] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("${data['start_time'] ?? 'N/A'} - ${data['end_time'] ?? 'N/A'}"),
+                  trailing: Text(
+                    isPresent ? "PRESENT" : "ABSENT",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: isPresent ? Colors.green : Colors.red,
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
