@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BMSCE AMS - Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .tab-btn.active { border-bottom-color: #1A5F7A; color: #1A5F7A; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-8">
+    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-3xl font-bold text-center text-[#1A5F7A] mb-8">BMSCE AMS Admin Control</h1>
+
+        <!-- Tabs -->
+        <div class="flex border-b mb-6 overflow-x-auto">
+            <button onclick="showTab('student')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent active">Add Student</button>
+            <button onclick="showTab('teacher')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent">Add Teacher</button>
+            <button onclick="showTab('course')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent">Add Course</button>
+            <button onclick="showTab('photo')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent text-blue-600">Update Photo</button>
+        </div>
+
+        <!-- Tab 1: Add Student -->
+        <div id="student-tab" class="tab-content active">
+            <h2 class="text-xl font-bold mb-4">Register New Student</h2>
+            <form id="studentForm" class="grid grid-cols-2 gap-4">
+                <input type="text" id="s_usn" placeholder="USN" class="border p-2 rounded" required>
+                <input type="text" id="s_name" placeholder="Full Name" class="border p-2 rounded" required>
+                <input type="email" id="s_email" placeholder="Email (@bmsce.ac.in)" class="border p-2 rounded col-span-2" required>
+                <input type="text" id="s_dept" placeholder="Dept" class="border p-2 rounded">
+                <input type="text" id="s_sem" placeholder="Semester" class="border p-2 rounded">
+                <input type="text" id="s_sec" placeholder="Section" class="border p-2 rounded">
+                <input type="text" id="s_phone" placeholder="Phone" class="border p-2 rounded">
+                <button type="submit" class="bg-[#1A5F7A] text-white p-2 rounded col-span-2 hover:bg-opacity-90">Add Student</button>
+            </form>
+        </div>
+
+        <!-- Tab 2: Add Teacher -->
+        <div id="teacher-tab" class="tab-content">
+            <h2 class="text-xl font-bold mb-4">Register New Teacher</h2>
+            <form id="teacherForm" class="grid grid-cols-2 gap-4">
+                <input type="text" id="t_name" placeholder="Full Name" class="border p-2 rounded col-span-2" required>
+                <input type="email" id="t_email" placeholder="Teacher Email" class="border p-2 rounded col-span-2" required>
+                <input type="text" id="t_dept" placeholder="Department" class="border p-2 rounded">
+                <input type="text" id="t_phone" placeholder="Phone" class="border p-2 rounded">
+                <button type="submit" class="bg-[#1A5F7A] text-white p-2 rounded col-span-2 hover:bg-opacity-90">Add Teacher</button>
+            </form>
+        </div>
+
+        <!-- Tab 3: Add Course -->
+        <div id="course-tab" class="tab-content">
+            <h2 class="text-xl font-bold mb-4">Add New Course</h2>
+            <form id="courseForm" class="grid grid-cols-2 gap-4">
+                <input type="text" id="c_code" placeholder="Course Code (e.g. 22CS4PCMAT)" class="border p-2 rounded" required>
+                <input type="text" id="c_name" placeholder="Course Name" class="border p-2 rounded" required>
+                <input type="text" id="c_dept" placeholder="Department" class="border p-2 rounded">
+                <input type="number" id="c_credits" placeholder="Credits" class="border p-2 rounded" required>
+                <input type="text" id="c_sem" placeholder="Semester" class="border p-2 rounded">
+                <button type="submit" class="bg-[#1A5F7A] text-white p-2 rounded col-span-2 hover:bg-opacity-90">Add Course</button>
+            </form>
+        </div>
+
+        <!-- Tab 4: Update Photo -->
+        <div id="photo-tab" class="tab-content">
+            <h2 class="text-xl font-bold mb-4">Upload / Update User Photo</h2>
+            <form id="photoForm" class="space-y-4">
+                <div class="flex gap-6 p-2 bg-gray-50 rounded border">
+                    <label class="font-medium">User Type:</label>
+                    <label><input type="radio" name="userRole" value="students" checked> Student</label>
+                    <label><input type="radio" name="userRole" value="teachers"> Teacher</label>
+                </div>
+                <input type="email" id="p_email" placeholder="Enter User Email Address" class="border p-2 rounded w-full" required>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Select Photo</label>
+                    <input type="file" id="p_file" accept="image/*" class="border p-2 rounded w-full" required>
+                </div>
+                <button type="submit" id="p_submit" class="w-full bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700">UPLOAD & LINK PHOTO</button>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, listAll, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBnhAaOzYTN6Ii52sl1FgkZN7IzHv4n7tY",
+            appId: "1:390125420903:web:6e90f17fdbc78016d22fc2",
+            projectId: "bmsce-ams",
+            authDomain: "bmsce-ams.firebaseapp.com",
+            storageBucket: "bmsce-ams.firebasestorage.app"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        // Add Student
+        document.getElementById('studentForm').onsubmit = async (e) => {
+            e.preventDefault();
+            try {
+                await addDoc(collection(db, "students"), {
+                    usn: document.getElementById('s_usn').value,
+                    name: document.getElementById('s_name').value,
+                    email: document.getElementById('s_email').value,
+                    department_id: document.getElementById('s_dept').value,
+                    semester_id: document.getElementById('s_sem').value,
+                    section: document.getElementById('s_sec').value,
+                    phone: document.getElementById('s_phone').value
+                });
+                alert("Student Added Successfully!");
+                e.target.reset();
+            } catch (error) { alert("Error: " + error.message); }
+        };
+
+        // Add Teacher
+        document.getElementById('teacherForm').onsubmit = async (e) => {
+            e.preventDefault();
+            try {
+                await addDoc(collection(db, "teachers"), {
+                    name: document.getElementById('t_name').value,
+                    email: document.getElementById('t_email').value,
+                    department_id: document.getElementById('t_dept').value,
+                    phone: document.getElementById('t_phone').value
+                });
+                alert("Teacher Added Successfully!");
+                e.target.reset();
+            } catch (error) { alert("Error: " + error.message); }
+        };
+
+        // Add Course
+        document.getElementById('courseForm').onsubmit = async (e) => {
+            e.preventDefault();
+            try {
+                await addDoc(collection(db, "courses"), {
+                    course_code: document.getElementById('c_code').value,
+                    course_name: document.getElementById('c_name').value,
+                    department_id: document.getElementById('c_dept').value,
+                    credits: parseInt(document.getElementById('c_credits').value),
+                    semester_id: document.getElementById('c_sem').value
+                });
+                alert("Course Added Successfully!");
+                e.target.reset();
+            } catch (error) { alert("Error: " + error.message); }
+        };
+
+        // Update Photo with Overwrite Logic
+        document.getElementById('photoForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('p_submit');
+            const email = document.getElementById('p_email').value.trim();
+            const role = document.querySelector('input[name="userRole"]:checked').value;
+            const file = document.getElementById('p_file').files[0];
+
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+
+            try {
+                const q = query(collection(db, role), where("email", "==", email));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    alert("User not found!");
+                    return;
+                }
+
+                const userDoc = querySnapshot.docs[0];
+                const folderName = (role === 'students') ? 'students_profiles' : 'teachers_profiles';
+
+                // FIXED FILENAME: email address (no timestamp) to overwrite
+                const storageRef = ref(storage, folderName + '/' + email);
+
+                // Upload (this will overwrite if the filename is the same)
+                await uploadBytes(storageRef, file);
+                const photoUrl = await getDownloadURL(storageRef);
+
+                await updateDoc(doc(db, role, userDoc.id), {
+                    profile_url: photoUrl
+                });
+
+                alert("Photo Updated Successfully (Old one replaced)!");
+                e.target.reset();
+            } catch (error) { alert("Error: " + error.message); }
+            finally { btn.disabled = false; btn.innerText = "UPLOAD & LINK PHOTO"; }
+        };
+
+        window.showTab = (tab) => {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+            event.target.classList.add('active');
+        };
+    </script>
+</body>
+</html>
