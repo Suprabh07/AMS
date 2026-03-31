@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'dart:io';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -419,17 +422,11 @@ class AttendanceDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(courseName),
-        backgroundColor: const Color(0xFF1A5F7A),
-        foregroundColor: Colors.white,
-      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('attendance')
             .where('usn', isEqualTo: usn)
             .where('course_code', isEqualTo: courseCode)
-            .orderBy('date', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -439,42 +436,161 @@ class AttendanceDetailScreen extends StatelessWidget {
             return const Center(child: Text("No attendance records found."));
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(15.0),
-            itemCount: snapshot.data!.docs.length,
-            itemBuilder: (context, index) {
-              var data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-              bool isPresent = data['status'] == 'Present';
+          var docs = snapshot.data!.docs;
+          docs.sort((a, b) => (b.data() as Map<String, dynamic>)['date']
+              .compareTo((a.data() as Map<String, dynamic>)['date']));
 
-              return Card(
-                margin: const EdgeInsets.only(bottom: 10.0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                child: ListTile(
-                  leading: Icon(
-                    isPresent ? Icons.check_circle : Icons.cancel,
-                    color: isPresent ? Colors.green : Colors.red,
-                  ),
-                  title: Text(data['date'] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("${data['start_time'] ?? 'N/A'} - ${data['end_time'] ?? 'N/A'}"),
-                  trailing: Text(
-                    isPresent ? "PRESENT" : "ABSENT",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isPresent ? Colors.green : Colors.red,
-                    ),
+          int total = docs.length;
+          int present = docs.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
+          int absent = total - present;
+          double percentage = (present / total) * 100;
+
+          return Column(
+            children: [
+              // Header with Image background
+              Container(
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage('assets/Top_Background.jpg'),
+                    fit: BoxFit.cover,
                   ),
                 ),
-              );
-            },
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top + 10,
+                  bottom: 20,
+                  left: 20,
+                  right: 20,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        Expanded(
+                          child: Text(
+                            courseName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _statItem("Total", total.toString()),
+                        _statItem("Present", present.toString()),
+                        _statItem("Absent", absent.toString()),
+                        _statItem("Percentage", "${percentage.toStringAsFixed(1)}%"),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // List of classes
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(15.0),
+                  itemCount: docs.length,
+                  itemBuilder: (context, index) {
+                    var data = docs[index].data() as Map<String, dynamic>;
+                    bool isPresent = data['status'] == 'Present';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10.0),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      child: ListTile(
+                        leading: Icon(
+                          isPresent ? Icons.check_circle : Icons.cancel,
+                          color: isPresent ? Colors.green : Colors.red,
+                        ),
+                        title: Text(data['date'] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text("${data['start_time'] ?? 'N/A'} - ${data['end_time'] ?? 'N/A'}"),
+                        trailing: Text(
+                          isPresent ? "PRESENT" : "ABSENT",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isPresent ? Colors.green : Colors.red,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           );
         },
       ),
     );
   }
+
+  Widget _statItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
+      ],
+    );
+  }
 }
 
-class StudentProfile extends StatelessWidget {
+class StudentProfile extends StatefulWidget {
   const StudentProfile({super.key});
+
+  @override
+  State<StudentProfile> createState() => _StudentProfileState();
+}
+
+class _StudentProfileState extends State<StudentProfile> {
+  bool _isUploading = false;
+
+  Future<void> _pickAndUploadImage(String currentEmail, String docId) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    
+    if (image == null) return;
+
+    setState(() => _isUploading = true);
+
+    try {
+      // 1. Upload to Storage (overwriting existing file for the email)
+      final storageRef = FirebaseStorage.instance.ref().child('students_profiles/$currentEmail');
+      await storageRef.putFile(File(image.path));
+      final String downloadUrl = await storageRef.getDownloadURL();
+
+      // 2. Update Firestore
+      await FirebaseFirestore.instance.collection('students').doc(docId).update({
+        'profile_url': downloadUrl,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile picture updated!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error uploading image: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
 
   void _showFullImage(BuildContext context, String? imageUrl) {
     if (imageUrl == null || imageUrl.isEmpty) return;
@@ -552,7 +668,8 @@ class StudentProfile extends StatelessWidget {
           return const Center(child: Text("Error loading profile"));
         }
 
-        var userData = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+        var doc = snapshot.data!.docs.first;
+        var userData = doc.data() as Map<String, dynamic>;
         String? profileUrl = userData['profile_url'];
 
         return SingleChildScrollView(
@@ -561,37 +678,46 @@ class StudentProfile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
-                child: GestureDetector(
-                  onTap: () => _showFullImage(context, profileUrl),
-                  child: Hero(
-                    tag: 'profile_pic',
-                    child: CircleAvatar(
-                      radius: 60, // Slightly larger
-                      backgroundColor: const Color(0xFFE2E8F0),
-                      child: ClipOval(
-                        child: (profileUrl != null && profileUrl.toString().trim().isNotEmpty)
-                            ? Image.network(
-                                profileUrl.toString().trim(),
-                                width: 120,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(Icons.account_circle, size: 120, color: Color(0xFF1A5F7A));
-                                },
-                              )
-                            : const Icon(Icons.account_circle, size: 120, color: Color(0xFF1A5F7A)),
+                child: Stack(
+                  children: [
+                    GestureDetector(
+                      onTap: () => _showFullImage(context, profileUrl),
+                      child: Hero(
+                        tag: 'profile_pic',
+                        child: CircleAvatar(
+                          radius: 65,
+                          backgroundColor: const Color(0xFFE2E8F0),
+                          child: ClipOval(
+                            child: _isUploading 
+                              ? const CircularProgressIndicator()
+                              : (profileUrl != null && profileUrl.toString().trim().isNotEmpty)
+                                ? Image.network(
+                                    profileUrl.toString().trim(),
+                                    width: 130,
+                                    height: 130,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Icon(Icons.account_circle, size: 130, color: Color(0xFF1A5F7A));
+                                    },
+                                  )
+                                : const Icon(Icons.account_circle, size: 130, color: Color(0xFF1A5F7A)),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              ),
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    "Tap to view photo",
-                    style: TextStyle(fontSize: 12, color: Colors.black45),
-                  ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: () => _pickAndUploadImage(user!.email!, doc.id),
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: const Color(0xFF1A5F7A),
+                          child: const Icon(Icons.edit, color: Colors.white, size: 20),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 30),
