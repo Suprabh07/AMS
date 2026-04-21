@@ -20,6 +20,8 @@
             <button onclick="showTab('student')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent active">Add Student</button>
             <button onclick="showTab('teacher')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent">Add Teacher</button>
             <button onclick="showTab('course')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent">Add Course</button>
+            <button onclick="showTab('mapping')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent">Map Teacher-Course</button>
+            <button onclick="showTab('student-course-mapping')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent">Map Student-Course</button>
             <button onclick="showTab('photo')" class="tab-btn py-2 px-4 font-semibold border-b-2 border-transparent text-blue-600">Update Photo</button>
         </div>
 
@@ -54,16 +56,61 @@
         <div id="course-tab" class="tab-content">
             <h2 class="text-xl font-bold mb-4">Add New Course</h2>
             <form id="courseForm" class="grid grid-cols-2 gap-4">
-                <input type="text" id="c_code" placeholder="Course Code (e.g. 22CS4PCMAT)" class="border p-2 rounded" required>
+                <input type="text" id="c_code" placeholder="Course Code" class="border p-2 rounded" required>
                 <input type="text" id="c_name" placeholder="Course Name" class="border p-2 rounded" required>
-                <input type="text" id="c_dept" placeholder="Department" class="border p-2 rounded">
+                <input type="text" id="c_dept" placeholder="Course's Department (e.g. Mathematics)" class="border p-2 rounded" required>
                 <input type="number" id="c_credits" placeholder="Credits" class="border p-2 rounded" required>
-                <input type="text" id="c_sem" placeholder="Semester" class="border p-2 rounded">
+                <div class="col-span-2 flex items-center gap-2 bg-gray-50 p-2 rounded border">
+                    <input type="checkbox" id="c_has_lab" class="w-5 h-5">
+                    <label for="c_has_lab" class="font-medium">Includes Lab Component?</label>
+                </div>
                 <button type="submit" class="bg-[#1A5F7A] text-white p-2 rounded col-span-2 hover:bg-opacity-90">Add Course</button>
             </form>
         </div>
 
-        <!-- Tab 4: Update Photo -->
+        <!-- Tab 4: Teacher-Course Mapping -->
+        <div id="mapping-tab" class="tab-content">
+            <h2 class="text-xl font-bold mb-4">Map Teacher to Course & Section</h2>
+            <form id="mappingForm" class="space-y-4">
+                <select id="m_teacher" class="border p-2 rounded w-full" required>
+                    <option value="">Select Teacher</option>
+                </select>
+                <select id="m_course" class="border p-2 rounded w-full" required>
+                    <option value="">Select Course</option>
+                </select>
+                <input type="text" id="m_section" placeholder="Section (e.g. A, B, V)" class="border p-2 rounded w-full" required>
+                <div id="m_type_container" class="hidden p-2 bg-blue-50 rounded border">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Select Component Type:</label>
+                    <select id="m_type" class="border p-2 rounded w-full">
+                        <option value="Theory">Theory</option>
+                        <option value="Lab">Lab</option>
+                    </select>
+                </div>
+                <button type="submit" class="bg-[#1A5F7A] text-white p-3 rounded w-full font-bold hover:bg-opacity-90">CREATE MAPPING</button>
+            </form>
+            <div id="mappingList" class="mt-6 space-y-2">
+                <!-- Mappings will appear here -->
+            </div>
+        </div>
+
+        <!-- Tab 5: Student-Course Mapping -->
+        <div id="student-course-mapping-tab" class="tab-content">
+            <h2 class="text-xl font-bold mb-4">Map Course to Student Dept & Sem</h2>
+            <p class="text-sm text-gray-600 mb-4">Define which courses are offered to a specific department and semester (e.g., Maths course for CIC 4th sem students).</p>
+            <form id="studentCourseMappingForm" class="space-y-4">
+                <select id="scm_course" class="border p-2 rounded w-full" required>
+                    <option value="">Select Course</option>
+                </select>
+                <input type="text" id="scm_dept" placeholder="Student Department (e.g. CIC)" class="border p-2 rounded w-full" required>
+                <input type="text" id="scm_sem" placeholder="Student Semester (e.g. 4)" class="border p-2 rounded w-full" required>
+                <button type="submit" class="bg-[#1A5F7A] text-white p-3 rounded w-full font-bold hover:bg-opacity-90">MAP COURSE TO STUDENTS</button>
+            </form>
+            <div id="scm_list" class="mt-6 space-y-2">
+                <!-- SCM mappings will appear here -->
+            </div>
+        </div>
+
+        <!-- Tab 6: Update Photo -->
         <div id="photo-tab" class="tab-content">
             <h2 class="text-xl font-bold mb-4">Upload / Update User Photo</h2>
             <form id="photoForm" class="space-y-4">
@@ -84,8 +131,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-        import { getStorage, ref, uploadBytes, getDownloadURL, listAll, deleteObject } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+        import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, doc, onSnapshot, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBnhAaOzYTN6Ii52sl1FgkZN7IzHv4n7tY",
@@ -98,6 +145,92 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const storage = getStorage(app);
+
+        let coursesCache = {};
+
+        // REAL-TIME DROPDOWN FETCHING
+        onSnapshot(collection(db, "teachers"), (snap) => {
+            const select = document.getElementById('m_teacher');
+            if (select) {
+                select.innerHTML = '<option value="">Select Teacher</option>';
+                snap.forEach(d => {
+                    const t = d.data();
+                    select.innerHTML += `<option value="${d.id}">${t.name} (${t.email})</option>`;
+                });
+            }
+        });
+
+        onSnapshot(collection(db, "courses"), (snap) => {
+            const m_select = document.getElementById('m_course');
+            const scm_select = document.getElementById('scm_course');
+            if (m_select) m_select.innerHTML = '<option value="">Select Course</option>';
+            if (scm_select) scm_select.innerHTML = '<option value="">Select Course</option>';
+
+            snap.forEach(d => {
+                const c = d.data();
+                coursesCache[c.course_code] = c;
+                const option = `<option value="${c.course_code}">${c.course_name} (${c.course_code})</option>`;
+                if (m_select) m_select.innerHTML += option;
+                if (scm_select) scm_select.innerHTML += option;
+            });
+        });
+
+        document.getElementById('m_course').addEventListener('change', (e) => {
+            const courseCode = e.target.value;
+            const container = document.getElementById('m_type_container');
+            const typeSelect = document.getElementById('m_type');
+            if (!courseCode) { container.classList.add('hidden'); return; }
+
+            const course = coursesCache[courseCode];
+            if (course && course.has_lab) {
+                container.classList.remove('hidden');
+                typeSelect.value = "Theory";
+            } else {
+                container.classList.add('hidden');
+                typeSelect.value = "Theory";
+            }
+        });
+
+        // REAL-TIME TEACHER MAPPING LIST
+        onSnapshot(collection(db, "teacher_mappings"), (snap) => {
+            const list = document.getElementById('mappingList');
+            if (!list) return;
+            list.innerHTML = '<h3 class="font-bold border-b pb-2">Active Teacher-Course Mappings</h3>';
+            snap.forEach(d => {
+                const m = d.data();
+                const course = coursesCache[m.course_code];
+                const displayType = (course && course.has_lab) ? ` (${m.type})` : "";
+
+                list.innerHTML += `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                        <span><b>${m.course_code}</b>${displayType} &rarr; Sec ${m.section}</span>
+                        <button onclick="deleteDocById('teacher_mappings', '${d.id}')" class="text-red-600 hover:font-bold">Delete</button>
+                    </div>
+                `;
+            });
+        });
+
+        // REAL-TIME SCM LIST
+        onSnapshot(collection(db, "student_course_mappings"), (snap) => {
+            const list = document.getElementById('scm_list');
+            if (!list) return;
+            list.innerHTML = '<h3 class="font-bold border-b pb-2">Active Student-Course Mappings</h3>';
+            snap.forEach(d => {
+                const m = d.data();
+                list.innerHTML += `
+                    <div class="flex justify-between items-center p-2 bg-blue-50 rounded text-sm">
+                        <span><b>${m.course_code}</b> &rarr; ${m.student_dept} (Sem ${m.student_sem})</span>
+                        <button onclick="deleteDocById('student_course_mappings', '${d.id}')" class="text-red-600 hover:font-bold">Delete</button>
+                    </div>
+                `;
+            });
+        });
+
+        window.deleteDocById = async (coll, id) => {
+            if(confirm('Delete this?')) {
+                await deleteDoc(doc(db, coll, id));
+            }
+        };
 
         // Add Student
         document.getElementById('studentForm').onsubmit = async (e) => {
@@ -112,9 +245,8 @@
                     section: document.getElementById('s_sec').value,
                     phone: document.getElementById('s_phone').value
                 });
-                alert("Student Added Successfully!");
-                e.target.reset();
-            } catch (error) { alert("Error: " + error.message); }
+                alert("Student Added!"); e.target.reset();
+            } catch (error) { alert(error.message); }
         };
 
         // Add Teacher
@@ -127,9 +259,8 @@
                     department_id: document.getElementById('t_dept').value,
                     phone: document.getElementById('t_phone').value
                 });
-                alert("Teacher Added Successfully!");
-                e.target.reset();
-            } catch (error) { alert("Error: " + error.message); }
+                alert("Teacher Added!"); e.target.reset();
+            } catch (error) { alert(error.message); }
         };
 
         // Add Course
@@ -139,52 +270,82 @@
                 await addDoc(collection(db, "courses"), {
                     course_code: document.getElementById('c_code').value,
                     course_name: document.getElementById('c_name').value,
-                    department_id: document.getElementById('c_dept').value,
+                    department_id: document.getElementById('c_dept').value, // Course's parent dept (e.g. Maths)
                     credits: parseInt(document.getElementById('c_credits').value),
-                    semester_id: document.getElementById('c_sem').value
+                    has_lab: document.getElementById('c_has_lab').checked
                 });
-                alert("Course Added Successfully!");
-                e.target.reset();
-            } catch (error) { alert("Error: " + error.message); }
+                alert("Course Added!"); e.target.reset();
+            } catch (error) { alert(error.message); }
         };
 
-        // Update Photo with Overwrite Logic
+        // CREATE TEACHER MAPPING
+        document.getElementById('mappingForm').onsubmit = async (e) => {
+            e.preventDefault();
+            try {
+                const teacherId = document.getElementById('m_teacher').value;
+                const courseCode = document.getElementById('m_course').value;
+                const section = document.getElementById('m_section').value.trim().toUpperCase();
+                const type = document.getElementById('m_type').value || "Theory";
+
+                // Check for existing mapping for this combination
+                const q = query(collection(db, "teacher_mappings"),
+                    where("course_code", "==", courseCode),
+                    where("section", "==", section),
+                    where("type", "==", type)
+                );
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    alert(`Error: A teacher is already mapped to ${courseCode} (${type}) for Section ${section}.`);
+                    return;
+                }
+
+                await addDoc(collection(db, "teacher_mappings"), {
+                    teacher_id: teacherId,
+                    course_code: courseCode,
+                    section: section,
+                    type: type,
+                    createdAt: new Date()
+                });
+                alert("Mapping Created!"); e.target.reset();
+                document.getElementById('m_type_container').classList.add('hidden');
+            } catch (error) { alert(error.message); }
+        };
+
+        // CREATE STUDENT-COURSE MAPPING
+        document.getElementById('studentCourseMappingForm').onsubmit = async (e) => {
+            e.preventDefault();
+            try {
+                await addDoc(collection(db, "student_course_mappings"), {
+                    course_code: document.getElementById('scm_course').value,
+                    student_dept: document.getElementById('scm_dept').value.trim(),
+                    student_sem: document.getElementById('scm_sem').value.trim(),
+                    createdAt: new Date()
+                });
+                alert("Student-Course Mapping Created!"); e.target.reset();
+            } catch (error) { alert(error.message); }
+        };
+
+        // Update Photo
         document.getElementById('photoForm').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('p_submit');
             const email = document.getElementById('p_email').value.trim();
             const role = document.querySelector('input[name="userRole"]:checked').value;
             const file = document.getElementById('p_file').files[0];
-
-            btn.disabled = true;
-            btn.innerText = "Processing...";
+            btn.disabled = true; btn.innerText = "Uploading...";
 
             try {
                 const q = query(collection(db, role), where("email", "==", email));
-                const querySnapshot = await getDocs(q);
+                const snap = await getDocs(q);
+                if (snap.empty) { alert("User not found!"); return; }
 
-                if (querySnapshot.empty) {
-                    alert("User not found!");
-                    return;
-                }
-
-                const userDoc = querySnapshot.docs[0];
-                const folderName = (role === 'students') ? 'students_profiles' : 'teachers_profiles';
-
-                // FIXED FILENAME: email address (no timestamp) to overwrite
-                const storageRef = ref(storage, folderName + '/' + email);
-
-                // Upload (this will overwrite if the filename is the same)
+                const storageRef = ref(storage, role + '_profiles/' + email);
                 await uploadBytes(storageRef, file);
-                const photoUrl = await getDownloadURL(storageRef);
+                const url = await getDownloadURL(storageRef);
 
-                await updateDoc(doc(db, role, userDoc.id), {
-                    profile_url: photoUrl
-                });
-
-                alert("Photo Updated Successfully (Old one replaced)!");
-                e.target.reset();
-            } catch (error) { alert("Error: " + error.message); }
+                await updateDoc(doc(db, role, snap.docs[0].id), { profile_url: url });
+                alert("Photo Updated!"); e.target.reset();
+            } catch (error) { alert(error.message); }
             finally { btn.disabled = false; btn.innerText = "UPLOAD & LINK PHOTO"; }
         };
 
@@ -192,7 +353,11 @@
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
             document.getElementById(tab + '-tab').classList.add('active');
-            event.target.classList.add('active');
+
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons.forEach(btn => {
+                if(btn.getAttribute('onclick').includes(tab)) btn.classList.add('active');
+            });
         };
     </script>
 </body>

@@ -14,6 +14,7 @@ class StudentDashboard extends StatefulWidget {
 
 class _StudentDashboardState extends State<StudentDashboard> {
   int _selectedIndex = 0;
+  final PageController _pageController = PageController();
 
   final List<Widget> _pages = [
     const StudentHome(),
@@ -27,6 +28,17 @@ class _StudentDashboardState extends State<StudentDashboard> {
     setState(() {
       _selectedIndex = index;
     });
+    _pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -61,16 +73,27 @@ class _StudentDashboardState extends State<StudentDashboard> {
                   ),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.notifications_none, size: 26, color: Colors.white),
-                  onPressed: () {},
-                ),
+                if (_selectedIndex == 0)
+                  IconButton(
+                    icon: const Icon(Icons.notifications_none, size: 26, color: Colors.white),
+                    onPressed: () {},
+                  )
+                else
+                  const SizedBox(width: 48),
               ],
             ),
           ),
-          // Page Content
+          // Page Content with Smooth Transition
           Expanded(
-            child: _pages[_selectedIndex],
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              children: _pages,
+            ),
           ),
         ],
       ),
@@ -225,65 +248,71 @@ class StudentCourses extends StatelessWidget {
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
-              .collection('courses')
-              .where('department_id', isEqualTo: dept)
-              .where('semester_id', isEqualTo: sem)
+              .collection('student_course_mappings')
+              .where('student_dept', isEqualTo: dept)
+              .where('student_sem', isEqualTo: sem)
               .snapshots(),
-          builder: (context, courseSnapshot) {
-            if (courseSnapshot.connectionState == ConnectionState.waiting) {
+          builder: (context, mappingSnapshot) {
+            if (mappingSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (courseSnapshot.hasError) {
-              return Center(child: Text("Error: ${courseSnapshot.error}"));
-            }
-            if (!courseSnapshot.hasData || courseSnapshot.data!.docs.isEmpty) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: Text(
-                    "No courses found for your department and semester.",
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.black54),
-                  ),
-                ),
-              );
+            if (!mappingSnapshot.hasData || mappingSnapshot.data!.docs.isEmpty) {
+              return const Center(child: Text("No courses mapped to your department and semester."));
             }
 
             return ListView.builder(
               padding: const EdgeInsets.all(15.0),
-              itemCount: courseSnapshot.data!.docs.length,
+              itemCount: mappingSnapshot.data!.docs.length,
               itemBuilder: (context, index) {
-                var course = courseSnapshot.data!.docs[index].data() as Map<String, dynamic>;
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 15.0),
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(15.0),
-                    title: Text(
-                      course['course_name'] ?? 'Unknown Course',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 5),
-                        Text("Code: ${course['course_code'] ?? 'N/A'}", style: const TextStyle(color: Colors.black54)),
-                        Text("Credits: ${course['credits'] ?? 'N/A'}", style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A5F7A).withAlpha(30),
-                        borderRadius: BorderRadius.circular(10),
+                var mapping = mappingSnapshot.data!.docs[index].data() as Map<String, dynamic>;
+                String courseCode = mapping['course_code'] ?? '';
+
+                return FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('courses')
+                      .where('course_code', isEqualTo: courseCode)
+                      .limit(1)
+                      .get(),
+                  builder: (context, courseSnapshot) {
+                    if (!courseSnapshot.hasData || courseSnapshot.data!.docs.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    var courseData = courseSnapshot.data!.docs.first.data() as Map<String, dynamic>;
+                    String courseName = courseData['course_name'] ?? 'Unknown';
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 15.0),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      child: ListTile(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CourseDetailScreen(
+                                courseName: courseName,
+                                courseCode: courseCode,
+                              ),
+                            ),
+                          );
+                        },
+                        contentPadding: const EdgeInsets.all(15.0),
+                        title: Text(
+                          courseName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 5),
+                            Text("Code: $courseCode", style: const TextStyle(color: Colors.black54)),
+                            Text("Credits: ${courseData['credits'] ?? 'N/A'}", style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                       ),
-                      child: Text(
-                        "Credits: ${course['credits'] ?? '-'}",
-                        style: const TextStyle(color: Color(0xFF1A5F7A), fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
+                    );
+                  },
                 );
               },
             );
@@ -292,6 +321,160 @@ class StudentCourses extends StatelessWidget {
       },
     );
   }
+}
+
+class CourseDetailScreen extends StatelessWidget {
+  final String courseName;
+  final String courseCode;
+
+  const CourseDetailScreen({
+    super.key,
+    required this.courseName,
+    required this.courseCode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        children: [
+          // Header with Image background
+          Container(
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/Top_Background.jpg'),
+                fit: BoxFit.cover,
+              ),
+            ),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 10,
+              bottom: 20,
+              left: 20,
+              right: 20,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        Expanded(
+                          child: Text(
+                            courseName,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      "Course Code: $courseCode",
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              
+              Expanded(
+                child: FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('teacher_mappings')
+                      .where('course_code', isEqualTo: courseCode)
+                      .get(),
+                  builder: (context, mappingSnap) {
+                    if (mappingSnap.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    
+                    if (mappingSnap.hasData && mappingSnap.data!.docs.isNotEmpty) {
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(15),
+                        itemCount: mappingSnap.data!.docs.length,
+                        itemBuilder: (context, index) {
+                          var mapping = mappingSnap.data!.docs[index].data() as Map<String, dynamic>;
+                          String teacherId = mapping['teacher_id'];
+                          String type = mapping['type'] ?? 'Theory';
+
+                          return FutureBuilder<DocumentSnapshot>(
+                            future: FirebaseFirestore.instance.collection('teachers').doc(teacherId).get(),
+                            builder: (context, teacherSnap) {
+                              if (!teacherSnap.hasData || !teacherSnap.data!.exists) return const SizedBox.shrink();
+                              var teacherData = teacherSnap.data!.data() as Map<String, dynamic>;
+                              String? profileUrl = teacherData['profile_url'];
+
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 15),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(15.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text("$type Instructor", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A5F7A))),
+                                      const Divider(),
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 30,
+                                            backgroundImage: (profileUrl != null && profileUrl.isNotEmpty) ? NetworkImage(profileUrl) : null,
+                                            child: (profileUrl == null || profileUrl.isEmpty) ? const Icon(Icons.person) : null,
+                                          ),
+                                          const SizedBox(width: 15),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(teacherData['name'] ?? 'N/A', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                                                Text(teacherData['email'] ?? 'N/A', style: const TextStyle(fontSize: 14, color: Colors.black54)),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      );
+                    }
+                    return const Center(child: Text("No instructor assigned yet."));
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+
+      Widget _infoRow(IconData icon, String label, String value) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 20.0),
+          child: Row(
+            children: [
+              Icon(icon, color: const Color(0xFF1A5F7A), size: 24),
+              const SizedBox(width: 15),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+                ],
+              ),
+            ],
+          ),
+        );
+      }
 }
 
 class StudentAttendance extends StatelessWidget {
@@ -318,80 +501,65 @@ class StudentAttendance extends StatelessWidget {
         String usn = studentData['usn'] ?? '';
         String dept = studentData['department_id'] ?? '';
         String sem = studentData['semester_id'] ?? '';
+        String section = studentData['section'] ?? '';
 
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
-              .collection('courses')
-              .where('department_id', isEqualTo: dept)
-              .where('semester_id', isEqualTo: sem)
+              .collection('student_course_mappings')
+              .where('student_dept', isEqualTo: dept)
+              .where('student_sem', isEqualTo: sem)
               .snapshots(),
-          builder: (context, courseSnapshot) {
-            if (courseSnapshot.connectionState == ConnectionState.waiting) {
+          builder: (context, mappingSnapshot) {
+            if (mappingSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (!courseSnapshot.hasData || courseSnapshot.data!.docs.isEmpty) {
+            if (!mappingSnapshot.hasData || mappingSnapshot.data!.docs.isEmpty) {
               return const Center(child: Text("No courses found"));
             }
 
             return ListView.builder(
               padding: const EdgeInsets.all(15.0),
-              itemCount: courseSnapshot.data!.docs.length,
+              itemCount: mappingSnapshot.data!.docs.length,
               itemBuilder: (context, index) {
-                var course = courseSnapshot.data!.docs[index].data() as Map<String, dynamic>;
-                String courseCode = course['course_code'] ?? '';
-                String courseName = course['course_name'] ?? '';
+                var mapping = mappingSnapshot.data!.docs[index].data() as Map<String, dynamic>;
+                String courseCode = mapping['course_code'] ?? '';
 
-                return StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('attendance')
-                      .where('usn', isEqualTo: usn)
+                return FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('courses')
                       .where('course_code', isEqualTo: courseCode)
-                      .snapshots(),
-                  builder: (context, attendanceSnapshot) {
-                    double percentage = 0.0;
-                    if (attendanceSnapshot.hasData && attendanceSnapshot.data!.docs.isNotEmpty) {
-                      int totalClasses = attendanceSnapshot.data!.docs.length;
-                      int presentClasses = attendanceSnapshot.data!.docs
-                          .where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present')
-                          .length;
-                      percentage = (presentClasses / totalClasses) * 100;
+                      .limit(1)
+                      .get(),
+                  builder: (context, courseSnapshot) {
+                    if (!courseSnapshot.hasData || courseSnapshot.data!.docs.isEmpty) {
+                      return const SizedBox.shrink();
                     }
+                    var courseData = courseSnapshot.data!.docs.first.data() as Map<String, dynamic>;
+                    String courseName = courseData['course_name'] ?? 'Unknown';
+                    bool hasLab = courseData['has_lab'] ?? false;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 15.0),
                       elevation: 2,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                      child: ListTile(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => AttendanceDetailScreen(
-                                courseName: courseName,
-                                courseCode: courseCode,
-                                usn: usn,
-                              ),
-                            ),
-                          );
-                        },
-                        contentPadding: const EdgeInsets.all(15.0),
-                        title: Text(
-                          courseName,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                        ),
-                        subtitle: Text("Code: $courseCode", style: const TextStyle(color: Colors.black54)),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                      child: Padding(
+                        padding: const EdgeInsets.all(15.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              "${percentage.toStringAsFixed(1)}%",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: percentage >= 75 ? Colors.green : Colors.red,
-                              ),
-                            ),
-                            const Text("Attendance", style: TextStyle(fontSize: 10)),
+                            Text(courseName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            Text("Code: $courseCode", style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                            const SizedBox(height: 15),
+                            if (hasLab)
+                              Row(
+                                children: [
+                                  Expanded(child: _attendanceTypeSummary(usn, section, courseCode, "Theory", true)),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: _attendanceTypeSummary(usn, section, courseCode, "Lab", true)),
+                                ],
+                              )
+                            else
+                              _attendanceTypeSummary(usn, section, courseCode, "Theory", true, isCentered: true),
                           ],
                         ),
                       ),
@@ -405,18 +573,96 @@ class StudentAttendance extends StatelessWidget {
       },
     );
   }
+
+  Widget _attendanceTypeSummary(String usn, String section, String courseCode, String type, bool showTypeLabel, {bool isCentered = false}) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('attendance')
+          .where('cc', isEqualTo: courseCode)
+          .where('s', isEqualTo: section)
+          .where('t', isEqualTo: type)
+          .snapshots(),
+      builder: (context, snapshot) {
+        double percentage = 0.0;
+        int total = 0;
+        if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+          total = snapshot.data!.docs.length;
+          int present = snapshot.data!.docs.where((doc) {
+            List presentUsns = doc.get('present_usns') ?? [];
+            return presentUsns.contains(usn);
+          }).length;
+          percentage = (present / total) * 100;
+        }
+
+        if (total == 0) return const SizedBox.shrink();
+
+        // Color Logic: >85 Green, 75-85 Yellow, <75 Red
+        Color statusColor = Colors.green;
+        if (percentage < 75) {
+          statusColor = Colors.red;
+        } else if (percentage <= 85) {
+          statusColor = Colors.orange; // Yellow/Orange
+        }
+
+        return Center(
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AttendanceDetailScreen(
+                    courseName: showTypeLabel ? "$courseCode ($type)" : courseCode,
+                    courseCode: courseCode,
+                    usn: usn,
+                    section: section,
+                    type: type,
+                  ),
+                ),
+              );
+            },
+            child: Container(
+              width: isCentered ? double.infinity : null,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showTypeLabel) Text(type, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text(
+                    "${percentage.toStringAsFixed(1)}%",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: statusColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class AttendanceDetailScreen extends StatelessWidget {
   final String courseName;
   final String courseCode;
   final String usn;
+  final String section;
+  final String type;
 
   const AttendanceDetailScreen({
     super.key,
     required this.courseName,
     required this.courseCode,
     required this.usn,
+    required this.section,
+    required this.type,
   });
 
   @override
@@ -425,8 +671,9 @@ class AttendanceDetailScreen extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('attendance')
-            .where('usn', isEqualTo: usn)
-            .where('course_code', isEqualTo: courseCode)
+            .where('cc', isEqualTo: courseCode)
+            .where('s', isEqualTo: section)
+            .where('t', isEqualTo: type)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -437,17 +684,20 @@ class AttendanceDetailScreen extends StatelessWidget {
           }
 
           var docs = snapshot.data!.docs;
-          docs.sort((a, b) => (b.data() as Map<String, dynamic>)['date']
-              .compareTo((a.data() as Map<String, dynamic>)['date']));
+          docs.sort((a, b) => (b.data() as Map<String, dynamic>)['d']
+              .compareTo((a.data() as Map<String, dynamic>)['d']));
 
           int total = docs.length;
-          int present = docs.where((doc) => (doc.data() as Map<String, dynamic>)['status'] == 'Present').length;
+          int present = docs.where((doc) {
+            var data = doc.data() as Map<String, dynamic>;
+            List presentUsns = data['present_usns'] ?? [];
+            return presentUsns.contains(usn);
+          }).length;
           int absent = total - present;
           double percentage = (present / total) * 100;
 
           return Column(
             children: [
-              // Header with Image background
               Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
@@ -497,14 +747,19 @@ class AttendanceDetailScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              // List of classes
               Expanded(
                 child: ListView.builder(
                   padding: const EdgeInsets.all(15.0),
                   itemCount: docs.length,
                   itemBuilder: (context, index) {
                     var data = docs[index].data() as Map<String, dynamic>;
-                    bool isPresent = data['status'] == 'Present';
+                    List presentUsns = data['present_usns'] ?? [];
+                    bool isPresent = presentUsns.contains(usn);
+
+                    int st = data['st'] ?? 0;
+                    int et = data['et'] ?? 0;
+                    String startTime = "${(st ~/ 60).toString().padLeft(2, '0')}:${(st % 60).toString().padLeft(2, '0')}";
+                    String endTime = "${(et ~/ 60).toString().padLeft(2, '0')}:${(et % 60).toString().padLeft(2, '0')}";
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10.0),
@@ -514,8 +769,8 @@ class AttendanceDetailScreen extends StatelessWidget {
                           isPresent ? Icons.check_circle : Icons.cancel,
                           color: isPresent ? Colors.green : Colors.red,
                         ),
-                        title: Text(data['date'] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text("${data['start_time'] ?? 'N/A'} - ${data['end_time'] ?? 'N/A'}"),
+                        title: Text(data['d'] ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text("$startTime - $endTime"),
                         trailing: Text(
                           isPresent ? "PRESENT" : "ABSENT",
                           style: TextStyle(
@@ -570,12 +825,10 @@ class _StudentProfileState extends State<StudentProfile> {
     setState(() => _isUploading = true);
 
     try {
-      // 1. Upload to Storage (overwriting existing file for the email)
       final storageRef = FirebaseStorage.instance.ref().child('students_profiles/$currentEmail');
       await storageRef.putFile(File(image.path));
       final String downloadUrl = await storageRef.getDownloadURL();
 
-      // 2. Update Firestore
       await FirebaseFirestore.instance.collection('students').doc(docId).update({
         'profile_url': downloadUrl,
       });
