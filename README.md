@@ -13,9 +13,11 @@ A modern, high-performance Attendance Management System designed specifically fo
 *   **Profile Management:** View and update profile pictures directly from the app using the pen icon. Full-screen zoomable profile viewer.
 *   **Secure Authentication:** Login/Signup restricted to `@bmsce.ac.in` email IDs. Persistent sessions and secure password reset.
 
-### For Teachers (In Progress)
-*   **Teacher Profiles:** Quick view of department and contact details.
-*   **Attendance Marking:** (Upcoming) Direct marking of attendance for mapped courses.
+### For Teachers
+*   **Attendance Management:** Efficiently mark daily attendance, view history, and edit or delete previous records.
+*   **Marks Entry & CIE Calculation:** Record marks for Internals (I1, I2, I3), Quizzes, and AAT. Built-in logic automatically calculates Best-of-2 internals and final CIE scores.
+*   **Course Mapping:** Access is restricted to courses and sections specifically assigned to each teacher.
+*   **Profile Management:** View department details and personal contact information.
 
 ### For Admins (Web Panel)
 *   **Admin Dashboard:** A standalone web-based control panel to manage students, teachers, and courses.
@@ -47,7 +49,7 @@ lib/
 ├── signup_screen.dart       # User registration with email validation
 ├── forgot_password_screen.dart # Email-based password recovery
 ├── student_dashboard.dart   # Main hub for students (Tabs & Logic)
-├── teacher_dashboard.dart   # Profile hub for teachers
+├── teacher_dashboard.dart   # Comprehensive hub for teachers (Attendance & Marks Management)
 └── user_role.dart           # Role definitions (Enum)
 admin_panel.html             # Standalone Admin Control Web App
 ```
@@ -84,7 +86,9 @@ admin_panel.html             # Standalone Admin Control Web App
 *   **`students`**: usn, name, email, department_id, semester_id, section, profile_url.
 *   **`teachers`**: name, email, department_id, phone, profile_url.
 *   **`courses`**: course_code, course_name, credits, department_id, semester_id.
-*   **`attendance`**: usn, course_code, date, start_time, end_time, status (Present/Absent).
+*   **`attendance`**: course_code (cc), section (s), type (t), date (d), present_usns (List).
+*   **`marks`**: course_id, section, student_id, raw/reduced marks for all components (I1, I2, I3, Lab, Quiz, AAT), and calculated CIE.
+*   **`teacher_mappings`**: teacher_id, course_code, section.
 
 ## ⚠️ Security Note
 The `lib/firebase_options.dart` file should **never** be pushed to public repositories if it contains sensitive keys. Ensure it is added to your `.gitignore`.
