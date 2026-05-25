@@ -1,97 +1,178 @@
-# BMSCE Attendance Management System (AMS)
+<div align="center">
+  <img src="assets/logo.png" alt="BMSCE AMS Logo" width="160" height="160">
+  
+  # 🚀 BMSCE Attendance Management System (AMS)
+  
+  ### *Digitalizing the Academic Pulse of BMS College of Engineering*
+  
+  <p align="center">
+    <a href="https://flutter.dev/"><img src="https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white" alt="Flutter"></a>
+    <a href="https://firebase.google.com/"><img src="https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black" alt="Firebase"></a>
+    <a href="https://dart.dev/"><img src="https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white" alt="Dart"></a>
+  </p>
 
-A modern, high-performance Attendance Management System designed specifically for **BMS College of Engineering**. This cross-platform mobile application helps students and teachers track attendance, courses, and marks seamlessly using a cloud-integrated solution.
+  <p align="center">
+    <b>A high-performance, real-time solution for students and educators.</b>
+    <br />
+    <a href="#-key-features"><strong>Explore the features »</strong></a>
+    <br />
+    <br />
+    <a href="#-interface-preview">View Demo</a>
+    ·
+    <a href="https://github.com/Suprabh07/AMS/issues">Report Bug</a>
+    ·
+    <a href="https://github.com/Suprabh07/AMS/issues">Request Feature</a>
+  </p>
+</div>
 
-## 🚀 Features
+---
 
-### For Students
-*   **Personalized Dashboard:** A clean Home screen with a custom BMSCE header, profile overview, and real-time notifications.
-*   **Course Management:** Automatically fetches courses based on the student's current Department and Semester (including Credits info).
-*   **Smart Attendance Tracking:** 
-    *   Summary view with color-coded percentages (Green for ≥75%).
-    *   Detailed history view for each subject showing every recorded class with date, time slot, and status.
-*   **Profile Management:** View and update profile pictures directly from the app using the pen icon. Full-screen zoomable profile viewer.
-*   **Secure Authentication:** Login/Signup restricted to `@bmsce.ac.in` email IDs. Persistent sessions and secure password reset.
+## 📖 Table of Contents
+- [🌟 Overview](#-overview)
+- [✨ Key Features](#-key-features)
+  - [👨‍🎓 Student Experience](#-student-experience)
+  - [👩‍🏫 Teacher Power-Tools](#-teacher-power-tools)
+- [🛠 Tech Stack](#-tech-stack)
+- [📱 Interface Preview](#-interface-preview)
+- [📂 Project Structure](#-project-structure)
+- [📊 Data Architecture](#-data-architecture)
+- [⚙️ Setup & Installation](#-setup--installation)
+- [🛡️ Security & Privacy](#-security--privacy)
+- [📄 License](#-license)
 
-### For Teachers
-*   **Attendance Management:** Efficiently mark daily attendance, view history, and edit or delete previous records.
-*   **Marks Entry & CIE Calculation:** Record marks for Internals (I1, I2, I3), Quizzes, and AAT. Built-in logic automatically calculates Best-of-2 internals and final CIE scores.
-*   **Course Mapping:** Access is restricted to courses and sections specifically assigned to each teacher.
-*   **Profile Management:** View department details and personal contact information.
+---
 
-### For Admins (Web Panel)
-*   **Admin Dashboard:** A standalone web-based control panel to manage students, teachers, and courses.
-*   **Storage Optimization:** Specialized logic to ensure only one profile image exists per user to minimize storage costs.
+## 🌟 Overview
+
+The **BMSCE AMS** is not just an attendance tracker; it's a comprehensive academic companion. Designed specifically for the **BMS College of Engineering** ecosystem, it streamlines the complex processes of attendance marking, CIE (Continuous Internal Evaluation) calculations, and student-teacher data synchronization.
+
+> **Why BMSCE AMS?** 
+> Manual attendance and CIE calculation are prone to errors and time-consuming. This system provides a **single source of truth** with automated logic that ensures 100% accuracy in "Best-of-2" internal scores and attendance percentages.
+
+---
+
+## ✨ Key Features
+
+### 👨‍🎓 Student Experience
+- **⚡ Real-time Dashboard:** Instant overview of attendance status across all courses.
+- **📊 Smart Analytics:** Color-coded progress indicators (Green ≥75%, Red <75%) to help students stay on track.
+- **📅 Session Transparency:** Detailed view of every record—know exactly when you were present or absent.
+- **👤 Profile Hub:** Self-service profile management with secure cloud-synced image storage.
+- **🔑 Secure Access:** Authenticated login restricted to official `@bmsce.ac.in` domains.
+
+### 👩‍🏫 Teacher Power-Tools
+- **🎯 Precision Marking:** Optimized interface for marking attendance of entire sections in seconds.
+- **🔢 Automated CIE Engine:** 
+  - Effortless entry for **Internals (I1, I2, I3), Quizzes, and AAT**.
+  - Built-in logic for **Best-of-2** calculation and final CIE aggregation.
+- **🛑 Intelligent Guards:** Real-time validation prevents data entry errors—automatic warnings if marks exceed thresholds.
+- **📝 Total Control:** Full flexibility to view, edit, or delete historical attendance records.
+- **🗺️ Tailored View:** Zero-clutter experience—teachers only see the specific sections and courses they handle.
+
+---
 
 ## 🛠 Tech Stack
 
-*   **Frontend:** Flutter (Dart)
-*   **Backend:** Firebase
-    *   **Authentication:** Email/Password based secure auth.
-    *   **Firestore:** Real-time NoSQL database for student, teacher, and course mapping.
-    *   **Storage:** Cloud Storage for profile photos.
-*   **Design:** Material 3 with custom Glassmorphism and Gradient elements.
+| Layer | Technology | Role |
+| :--- | :--- | :--- |
+| **Frontend** | **Flutter & Material 3** | Cross-platform UI with modern aesthetics |
+| **Backend** | **Firebase Firestore** | Real-time NoSQL cloud database |
+| **Auth** | **Firebase Auth** | Secure student/teacher identity management |
+| **Storage** | **Cloud Storage** | Scalable hosting for profile assets |
+| **Logic** | **Dart** | High-performance business logic |
 
-## 📱 Screenshots
+---
 
-| Splash & Login | Student Dashboard | Attendance Details | Profile Tab |
-|:---:|:---:|:---:|:---:|
-| ![Login](https://via.placeholder.com/200x400?text=Login) | ![Dashboard](https://via.placeholder.com/200x400?text=Dashboard) | ![Attendance](https://via.placeholder.com/200x400?text=Attendance) | ![Profile](https://via.placeholder.com/200x400?text=Profile) |
+## 📱 Interface Preview
 
-*(Note: Replace placeholders with actual screenshots from your `assets/` folder)*
+<div align="center">
+  <table style="border: none;">
+    <tr>
+      <td align="center"><b>Modern Login</b></td>
+      <td align="center"><b>Student Dashboard</b></td>
+      <td align="center"><b>Attendance History</b></td>
+      <td align="center"><b>Teacher Tools</b></td>
+    </tr>
+    <tr>
+      <td><img src="https://via.placeholder.com/200x400?text=Login+UI" width="180" style="border-radius: 15px;"></td>
+      <td><img src="https://via.placeholder.com/200x400?text=Dashboard+UI" width="180" style="border-radius: 15px;"></td>
+      <td><img src="https://via.placeholder.com/200x400?text=History+UI" width="180" style="border-radius: 15px;"></td>
+      <td><img src="https://via.placeholder.com/200x400?text=Teacher+UI" width="180" style="border-radius: 15px;"></td>
+    </tr>
+  </table>
+  <p><i>(Visualizing the future of BMSCE Academic Management)</i></p>
+</div>
+
+---
 
 ## 📂 Project Structure
 
-```
+```bash
 lib/
-├── main.dart                # Entry point & Auth state management
-├── login_screen.dart        # Secure login with role selection
-├── signup_screen.dart       # User registration with email validation
-├── forgot_password_screen.dart # Email-based password recovery
-├── student_dashboard.dart   # Main hub for students (Tabs & Logic)
-├── teacher_dashboard.dart   # Comprehensive hub for teachers (Attendance & Marks Management)
-└── user_role.dart           # Role definitions (Enum)
-admin_panel.html             # Standalone Admin Control Web App
+├── main.dart                # System entry & Auth orchestration
+├── login_screen.dart        # Multi-role secure gateway
+├── student_dashboard.dart   # Interactive hub for student tools
+├── teacher_dashboard.dart   # Attendance & CIE Management engine
+├── user_role.dart           # Permission & Role definitions
+└── firebase_options.dart    # Cloud configuration (Secure)
 ```
 
-## ⚙️ Setup and Installation
+---
 
-1.  **Prerequisites:**
-    *   Flutter SDK installed.
-    *   Firebase Project created.
-    *   Blaze Plan (required for Storage/Functions if using advanced features).
+## 📊 Data Architecture
 
-2.  **Clone the Repo:**
-    ```bash
-    git clone https://github.com/Suprabh07/AMS.git
-    cd AMS_bmsce
-    ```
+<details>
+<summary>🔍 <b>Explore the Firestore Schema</b></summary>
 
-3.  **Firebase Configuration:**
-    *   Add your `google-services.json` (Android) and `GoogleService-Info.plist` (iOS).
-    *   Update `lib/firebase_options.dart` with your project keys.
+The system utilizes a flat, highly-indexed NoSQL structure:
 
-4.  **Install Dependencies:**
-    ```bash
-    flutter pub get
-    ```
+- **`students`**: USN-keyed records for rapid profile retrieval.
+- **`teachers`**: Department-specific educator metadata.
+- **`courses`**: Academic catalog including credit weightage and lab status.
+- **`attendance`**: Daily session logs with atomic USN list updates.
+- **`marks`**: Multi-component performance records with automated reduction fields.
+- **`teacher_mappings`**: Secure authorization links for classroom management.
 
-5.  **Run the App:**
-    ```bash
-    flutter run
-    ```
+</details>
 
-## 📊 Database Schema
+---
 
-*   **`students`**: usn, name, email, department_id, semester_id, section, profile_url.
-*   **`teachers`**: name, email, department_id, phone, profile_url.
-*   **`courses`**: course_code, course_name, credits, department_id, semester_id.
-*   **`attendance`**: course_code (cc), section (s), type (t), date (d), present_usns (List).
-*   **`marks`**: course_id, section, student_id, raw/reduced marks for all components (I1, I2, I3, Lab, Quiz, AAT), and calculated CIE.
-*   **`teacher_mappings`**: teacher_id, course_code, section.
+## ⚙️ Setup & Installation
 
-## ⚠️ Security Note
-The `lib/firebase_options.dart` file should **never** be pushed to public repositories if it contains sensitive keys. Ensure it is added to your `.gitignore`.
+### 1️⃣ Environment Prep
+- Install [Flutter SDK](https://docs.flutter.dev/get-started/install) (Stable)
+- Configure [Firebase Project](https://console.firebase.google.com/)
+
+### 2️⃣ Quick Start
+```bash
+# Clone the repository
+git clone https://github.com/Suprabh07/AMS.git
+
+# Install dependencies
+flutter pub get
+
+# Setup Firebase (requires FlutterFire CLI)
+flutterfire configure
+
+# Run on your device
+flutter run
+```
+
+---
+
+## 🛡️ Security & Privacy
+- **Domain Locking:** Access is strictly limited to verified institution email domains.
+- **Role Isolation:** Built-in middleware ensures teachers cannot access student-only views and vice versa.
+- **Secure Storage:** sensitive keys are managed via local properties and excluded from public version control.
+
+---
 
 ## 📄 License
-Distributed under the MIT License. See `LICENSE` for more information.
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+<div align="center">
+  <p><b>Crafted with ❤️ for the BMSCE Community</b></p>
+  <sub>Suprabh07 &copy; 2024 • Version 1.0.0</sub>
+</div>
