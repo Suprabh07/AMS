@@ -761,6 +761,25 @@ class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClie
   Future<void> _saveMarks() async {
     if (_selectedCourse == null || _selectedSection == null) return;
 
+    double maxMark = _calculateMaxMark();
+    List<String> invalidUsns = [];
+    _marksMap.forEach((usn, mark) {
+      if (mark > maxMark || mark < 0) {
+        invalidUsns.add(usn);
+      }
+    });
+
+    if (invalidUsns.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Marks for ${invalidUsns.length} students exceed the maximum of $maxMark!"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        )
+      );
+      return;
+    }
+
     try {
       WriteBatch batch = FirebaseFirestore.instance.batch();
       
@@ -1049,23 +1068,33 @@ class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClie
                                 },
                               ),
                               trailing: SizedBox(
-                                width: 80,
+                                width: 85,
                                 child: TextFormField(
                                   key: ValueKey("${usn}_${_selectedComponent}"),
                                   initialValue: _marksMap[usn]?.toString() ?? '',
-                                  keyboardType: TextInputType.number,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                   readOnly: _selectedComponent == 'CIE',
+                                  style: const TextStyle(fontSize: 14),
                                   decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                                     border: const OutlineInputBorder(),
                                     filled: _selectedComponent == 'CIE',
                                     fillColor: _selectedComponent == 'CIE' ? Colors.grey[200] : null,
+                                    errorStyle: const TextStyle(fontSize: 10, height: 0.8),
                                   ),
+                                  autovalidateMode: AutovalidateMode.onUserInteraction,
+                                  validator: (val) {
+                                    if (val == null || val.isEmpty) return null;
+                                    double? mark = double.tryParse(val);
+                                    double max = _calculateMaxMark();
+                                    if (mark == null) return "Invalid";
+                                    if (mark > max) return "Max $max";
+                                    if (mark < 0) return "Min 0";
+                                    return null;
+                                  },
                                   onChanged: (val) {
                                     double? mark = double.tryParse(val);
-                                    if (mark != null) {
-                                      _marksMap[usn] = mark;
-                                    }
+                                    _marksMap[usn] = mark ?? 0.0;
                                   },
                                 ),
                               ),
