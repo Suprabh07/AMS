@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'package:fl_chart/fl_chart.dart';
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({super.key});
@@ -20,7 +21,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
     const StudentHome(),
     const StudentCourses(),
     const StudentAttendance(),
-    const Center(child: Text('Marks Screen', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+    const StudentMarks(),
     const StudentProfile(),
   ];
 
@@ -805,6 +806,238 @@ class AttendanceDetailScreen extends StatelessWidget {
     );
   }
 }
+
+class StudentMarks extends StatelessWidget {
+  const StudentMarks({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('students')
+          .where('email', isEqualTo: user?.email)
+          .snapshots(),
+      builder: (context, studentSnapshot) {
+        if (studentSnapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!studentSnapshot.hasData || studentSnapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("Student data not found"));
+        }
+
+        var studentData = studentSnapshot.data!.docs.first.data() as Map<String, dynamic>;
+        String usn = studentData['usn'] ?? '';
+        String dept = studentData['department_id'] ?? '';
+        String sem = studentData['semester_id'] ?? '';
+        String section = studentData['section'] ?? '';
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('student_course_mappings')
+              .where('student_dept', isEqualTo: dept)
+              .where('student_sem', isEqualTo: sem)
+              .snapshots(),
+          builder: (context, mappingSnapshot) {
+            if (mappingSnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (!mappingSnapshot.hasData || mappingSnapshot.data!.docs.isEmpty) {
+              return const Center(child: Text("No courses found"));
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(15.0),
+              itemCount: mappingSnapshot.data!.docs.length,
+              itemBuilder: (context, index) {
+                var mapping = mappingSnapshot.data!.docs[index].data() as Map<String, dynamic>;
+                String courseCode = mapping['course_code'] ?? '';
+
+                return FutureBuilder<QuerySnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('courses')
+                      .where('course_code', isEqualTo: courseCode)
+                      .limit(1)
+                      .get(),
+                  builder: (context, courseSnapshot) {
+                    if (!courseSnapshot.hasData || courseSnapshot.data!.docs.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+                    var courseData = courseSnapshot.data!.docs.first.data() as Map<String, dynamic>;
+                    String courseName = courseData['course_name'] ?? 'Unknown';
+                    bool hasLab = courseData['has_lab'] ?? false;
+
+                    return StreamBuilder<DocumentSnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('marks')
+                          .doc("${courseCode}_${section}_$usn")
+                          .snapshots(),
+                      builder: (context, marksSnap) {
+                        Map<String, dynamic> marks = {};
+                        if (marksSnap.hasData && marksSnap.data!.exists) {
+                          marks = marksSnap.data!.data() as Map<String, dynamic>;
+                        }
+
+                        double i1 = (marks['internal1_reduced'] ?? 0.0).toDouble();
+                        double i2 = (marks['internal2_reduced'] ?? 0.0).toDouble();
+                        double i3 = (marks['internal3_reduced'] ?? 0.0).toDouble();
+                        double labOrQuiz = hasLab 
+                            ? (marks['lab_exam_reduced'] ?? 0.0).toDouble()
+                            : (marks['quiz_marks'] ?? 0.0).toDouble();
+                        double aat = (marks['aat_marks'] ?? 0.0).toDouble();
+                        double cieTotal = (marks['cie_total'] ?? 0.0).toDouble();
+
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 15.0),
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          clipBehavior: Clip.antiAlias,
+                          child: ExpansionTile(
+                            title: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(courseName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                      Text("Code: $courseCode", style: const TextStyle(color: Colors.black54, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1A5F7A),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    "CIE: $cieTotal/50",
+                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(15.0),
+                                child: Column(
+                                  children: [
+                                    const Text("Performance Trend", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                                    const SizedBox(height: 20),
+                                    SizedBox(
+                                      height: 180,
+                                      child: LineChart(
+                                        LineChartData(
+                                          gridData: const FlGridData(show: false),
+                                          titlesData: FlTitlesData(
+                                            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                            bottomTitles: AxisTitles(
+                                              sideTitles: SideTitles(
+                                                showTitles: true,
+                                                getTitlesWidget: (value, meta) {
+                                                  switch (value.toInt()) {
+                                                    case 0: return const Text("I1", style: TextStyle(fontSize: 10));
+                                                    case 1: return const Text("I2", style: TextStyle(fontSize: 10));
+                                                    case 2: return const Text("I3", style: TextStyle(fontSize: 10));
+                                                    case 3: return Text(hasLab ? "Lab" : "Quiz", style: const TextStyle(fontSize: 10));
+                                                    case 4: return const Text("AAT", style: TextStyle(fontSize: 10));
+                                                  }
+                                                  return const Text("");
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                          borderData: FlBorderData(show: false),
+                                          lineBarsData: [
+                                            LineChartBarData(
+                                              spots: [
+                                                FlSpot(0, i1),
+                                                FlSpot(1, i2),
+                                                FlSpot(2, i3),
+                                                FlSpot(3, labOrQuiz),
+                                                FlSpot(4, aat),
+                                              ],
+                                              isCurved: true,
+                                              color: const Color(0xFF1A5F7A),
+                                              barWidth: 4,
+                                              isStrokeCapRound: true,
+                                              dotData: const FlDotData(show: true),
+                                              belowBarData: BarAreaData(
+                                                show: true,
+                                                color: const Color(0xFF1A5F7A).withAlpha(30),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    const Divider(),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                      children: [
+                                        _markComponent("I1", i1, hasLab ? 10 : 20),
+                                        _markComponent("I2", i2, hasLab ? 10 : 20),
+                                        _markComponent("I3", i3, hasLab ? 10 : 20),
+                                        _markComponent(hasLab ? "Lab" : "Quiz", labOrQuiz, hasLab ? 25 : 5),
+                                        _markComponent("AAT", aat, 5),
+                                      ],
+                                    ),
+                                    if (marks.containsKey('see_marks')) ...[
+                                      const SizedBox(height: 15),
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.withAlpha(20),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: Colors.green.withAlpha(50)),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("Semester End Exam (SEE)", style: TextStyle(fontWeight: FontWeight.bold)),
+                                            Text("${marks['see_marks']}/100", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _markComponent(String label, dynamic value, int max) {
+    return Column(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(
+          value?.toString() ?? "--",
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A5F7A)),
+        ),
+        Text("/$max", style: const TextStyle(fontSize: 9, color: Colors.grey)),
+      ],
+    );
+  }
+}
+
 
 class StudentProfile extends StatefulWidget {
   const StudentProfile({super.key});

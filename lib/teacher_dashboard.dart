@@ -19,7 +19,7 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
 
   final List<Widget> _pages = [
     const TeacherHome(),
-    const Center(child: Text('Marks Screen', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+    const TeacherMarks(),
     const TeacherAttendanceMarking(),
     const TeacherProfile(),
   ];
@@ -732,6 +732,433 @@ class _TeacherAttendanceMarkingState extends State<TeacherAttendanceMarking> wit
         ],
       ),
     );
+  }
+}
+
+class TeacherMarks extends StatefulWidget {
+  const TeacherMarks({super.key});
+
+  @override
+  State<TeacherMarks> createState() => _TeacherMarksState();
+}
+
+class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  String? _selectedCourse;
+  String? _selectedSection;
+  bool _hasLab = false;
+  
+  // Marks selection
+  String _selectedComponent = 'I1'; // I1, I2, I3, Quiz, AAT, Lab
+  Map<String, double> _marksMap = {}; // USN -> Mark
+  bool _isLoadingStudents = false;
+
+  final List<String> _nonLabComponents = ['I1', 'I2', 'I3', 'Quiz', 'AAT', 'CIE', 'SEE'];
+  final List<String> _labComponents = ['I1', 'I2', 'I3', 'Lab', 'AAT', 'CIE', 'SEE'];
+
+  Future<void> _saveMarks() async {
+    if (_selectedCourse == null || _selectedSection == null) return;
+
+    try {
+      WriteBatch batch = FirebaseFirestore.instance.batch();
+      
+      for (var entry in _marksMap.entries) {
+        String usn = entry.key;
+        double mark = entry.value;
+        
+        DocumentReference docRef = FirebaseFirestore.instance
+            .collection('marks')
+            .doc("${_selectedCourse}_${_selectedSection}_$usn");
+            
+        Map<String, dynamic> dataToSave = {
+          'course_id': _selectedCourse,
+          'section': _selectedSection,
+          'student_id': usn,
+          'last_updated': FieldValue.serverTimestamp(),
+        };
+
+        String fieldName = _selectedComponent.toLowerCase();
+        if (_selectedComponent.startsWith('I')) {
+          fieldName = "internal${_selectedComponent.substring(1)}_raw";
+        } else if (_selectedComponent == 'Lab') {
+          fieldName = "lab_exam_raw";
+        } else if (_selectedComponent == 'Quiz') {
+          fieldName = "quiz_marks";
+        } else if (_selectedComponent == 'AAT') {
+          fieldName = "aat_marks";
+        } else if (_selectedComponent == 'CIE') {
+          fieldName = "cie_total";
+        } else if (_selectedComponent == 'SEE') {
+          fieldName = "see_marks";
+        }
+            
+        dataToSave[fieldName] = mark;
+            
+        batch.set(docRef, dataToSave, SetOptions(merge: true));
+      }
+
+      await batch.commit();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Marks saved successfully!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving marks: $e')));
+      }
+    }
+  }
+
+  Future<void> _calculateAndPopulateCIE() async {
+    setState(() => _isLoadingStudents = true);
+    
+    Map<String, double> calculatedCIE = {};
+    
+    for (var usn in _marksMap.keys) {
+      var markDoc = await FirebaseFirestore.instance
+          .collection('marks')
+          .doc("${_selectedCourse}_${_selectedSection}_$usn")
+          .get();
+      
+      if (markDoc.exists) {
+        var data = markDoc.data() as Map<String, dynamic>;
+        double i1Raw = (data['internal1_raw'] ?? 0.0).toDouble();
+        double i2Raw = (data['internal2_raw'] ?? 0.0).toDouble();
+        double i3Raw = (data['internal3_raw'] ?? 0.0).toDouble();
+        double aat = (data['aat_marks'] ?? 0.0).toDouble();
+        
+        // Reduction logic
+        double i1Red, i2Red, i3Red;
+        if (_hasLab) {
+          i1Red = i1Raw / 4.0; // 40 -> 10
+          i2Red = i2Raw / 4.0;
+          i3Red = i3Raw / 4.0;
+        } else {
+          i1Red = i1Raw / 2.0; // 40 -> 20
+          i2Red = i2Raw / 2.0;
+          i3Red = i3Raw / 2.0;
+        }
+
+        List<double> reducedInternals = [i1Red, i2Red, i3Red]..sort((a, b) => b.compareTo(a));
+        double best1 = reducedInternals[0];
+        double best2 = reducedInternals[1];
+        double bestTwoTotal = best1 + best2;
+
+        double finalCie = 0;
+        double labRed = 0;
+        double quiz = 0;
+
+        if (_hasLab) {
+          double labRaw = (data['lab_exam_raw'] ?? 0.0).toDouble();
+          labRed = labRaw / 2.0; // 50 -> 25
+          finalCie = bestTwoTotal + labRed + aat;
+        } else {
+          quiz = (data['quiz_marks'] ?? 0.0).toDouble();
+          finalCie = bestTwoTotal + quiz + aat;
+        }
+
+        double roundedCie = double.parse(finalCie.toStringAsFixed(2));
+        calculatedCIE[usn] = roundedCie;
+
+        // Update full record with calculated fields
+        await FirebaseFirestore.instance
+            .collection('marks')
+            .doc("${_selectedCourse}_${_selectedSection}_$usn")
+            .update({
+          'internal1_reduced': i1Red,
+          'internal2_reduced': i2Red,
+          'internal3_reduced': i3Red,
+          'best_internal_1': best1,
+          'best_internal_2': best2,
+          'best_two_total': bestTwoTotal,
+          'lab_exam_reduced': _hasLab ? labRed : 0.0,
+          'cie_total': roundedCie,
+        });
+      } else {
+        calculatedCIE[usn] = 0.0;
+      }
+    }
+
+    setState(() {
+      _marksMap = calculatedCIE;
+      _isLoadingStudents = false;
+    });
+  }
+
+  double _calculateMaxMark() {
+    if (_selectedComponent == 'Quiz' || _selectedComponent == 'AAT') return 5.0;
+    if (_selectedComponent == 'Lab') return 50.0;
+    if (_selectedComponent == 'CIE') return 50.0;
+    if (_selectedComponent == 'SEE') return 100.0;
+    if (_selectedComponent.startsWith('I')) return 40.0;
+    return 100.0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final user = FirebaseAuth.instance.currentUser;
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('teachers')
+          .where('email', isEqualTo: user?.email)
+          .snapshots(),
+      builder: (context, teacherSnapshot) {
+        if (!teacherSnapshot.hasData || teacherSnapshot.data!.docs.isEmpty) return const SizedBox.shrink();
+        String teacherId = teacherSnapshot.data!.docs.first.id;
+
+        return Column(
+          children: [
+            // Course Selection
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('teacher_mappings')
+                  .where('teacher_id', isEqualTo: teacherId)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const LinearProgressIndicator();
+                var mappings = snapshot.data!.docs;
+
+                return Padding(
+                  padding: const EdgeInsets.all(15.0),
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedCourse != null ? "${_selectedCourse}_${_selectedSection}" : null,
+                    decoration: const InputDecoration(labelText: "Select Course & Section", border: OutlineInputBorder()),
+                    items: mappings.map((m) {
+                      var data = m.data() as Map<String, dynamic>;
+                      String c = data['course_code'] ?? '';
+                      String s = data['section'] ?? '';
+                      return DropdownMenuItem(
+                        value: "${c}_$s",
+                        child: Text("$c - Sec $s"),
+                      );
+                    }).toList(),
+                    onChanged: (val) async {
+                      if (val == null) return;
+                      var parts = val.split('_');
+                      String courseCode = parts[0];
+                      String section = parts[1];
+
+                      // Check if course has lab
+                      var courseDoc = await FirebaseFirestore.instance
+                          .collection('courses')
+                          .where('course_code', isEqualTo: courseCode)
+                          .limit(1)
+                          .get();
+                      
+                      bool hasLab = false;
+                      if (courseDoc.docs.isNotEmpty) {
+                        hasLab = courseDoc.docs.first.get('has_lab') ?? false;
+                      }
+
+                      setState(() {
+                        _selectedCourse = courseCode;
+                        _selectedSection = section;
+                        _hasLab = hasLab;
+                        _marksMap.clear();
+                        _isLoadingStudents = true;
+                        // Reset component if it's not valid for the new course type
+                        if (_hasLab && !_labComponents.contains(_selectedComponent)) {
+                          _selectedComponent = 'I1';
+                        } else if (!_hasLab && !_nonLabComponents.contains(_selectedComponent)) {
+                          _selectedComponent = 'I1';
+                        }
+                      });
+
+                      // Fetch Students and existing marks
+                      await _loadStudentsAndMarks();
+                    },
+                  ),
+                );
+              },
+            ),
+
+            if (_selectedCourse != null) ...[
+              // Component Selection (I1, I2, I3, etc.)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  children: (_hasLab ? _labComponents : _nonLabComponents).map((comp) {
+                    bool isSelected = _selectedComponent == comp;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: ChoiceChip(
+                        label: Text(comp),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() {
+                              _selectedComponent = comp;
+                            });
+                            _loadStudentsAndMarks();
+                          }
+                        },
+                        selectedColor: const Color(0xFF1A5F7A),
+                        labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+
+              const Divider(),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 15.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("Component: $_selectedComponent (Max: ${_calculateMaxMark()})", 
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A5F7A))),
+                    if (_selectedComponent == 'CIE')
+                      ElevatedButton.icon(
+                        onPressed: _calculateAndPopulateCIE,
+                        icon: const Icon(Icons.calculate, size: 18),
+                        label: const Text("Calculate"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              Expanded(
+                child: _isLoadingStudents
+                    ? const Center(child: CircularProgressIndicator())
+                    : ListView.builder(
+                        itemCount: _marksMap.length,
+                        itemBuilder: (context, index) {
+                          String usn = _marksMap.keys.elementAt(index);
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                            child: ListTile(
+                              title: Text(usn, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: FutureBuilder<QuerySnapshot>(
+                                future: FirebaseFirestore.instance.collection('students').where('usn', isEqualTo: usn).limit(1).get(),
+                                builder: (context, snap) {
+                                  if (snap.hasData && snap.data!.docs.isNotEmpty) {
+                                    return Text(snap.data!.docs.first.get('name'));
+                                  }
+                                  return const Text("Loading...");
+                                },
+                              ),
+                              trailing: SizedBox(
+                                width: 80,
+                                child: TextFormField(
+                                  key: ValueKey("${usn}_${_selectedComponent}"),
+                                  initialValue: _marksMap[usn]?.toString() ?? '',
+                                  keyboardType: TextInputType.number,
+                                  readOnly: _selectedComponent == 'CIE',
+                                  decoration: InputDecoration(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                    border: const OutlineInputBorder(),
+                                    filled: _selectedComponent == 'CIE',
+                                    fillColor: _selectedComponent == 'CIE' ? Colors.grey[200] : null,
+                                  ),
+                                  onChanged: (val) {
+                                    double? mark = double.tryParse(val);
+                                    if (mark != null) {
+                                      _marksMap[usn] = mark;
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.all(15.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: _saveMarks,
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1A5F7A), foregroundColor: Colors.white),
+                    child: Text(_selectedComponent == 'CIE' ? "SAVE CALCULATED CIE" : "SAVE MARKS", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+            ] else 
+              const Expanded(child: Center(child: Text("Please select a course to proceed"))),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _loadStudentsAndMarks() async {
+    setState(() => _isLoadingStudents = true);
+
+    // 1. Get students for this course/section
+    var scmMappings = await FirebaseFirestore.instance
+        .collection('student_course_mappings')
+        .where('course_code', isEqualTo: _selectedCourse)
+        .get();
+    
+    Set<String> studentUsns = {};
+    for (var mappingDoc in scmMappings.docs) {
+      var mData = mappingDoc.data();
+      var students = await FirebaseFirestore.instance
+          .collection('students')
+          .where('department_id', isEqualTo: mData['student_dept'])
+          .where('semester_id', isEqualTo: mData['student_sem'])
+          .where('section', isEqualTo: _selectedSection)
+          .get();
+      for (var sDoc in students.docs) {
+        studentUsns.add(sDoc.get('usn'));
+      }
+    }
+
+    // 2. Get existing marks for these students
+    Map<String, double> newMarksMap = {};
+    for (var usn in studentUsns) {
+      var markDoc = await FirebaseFirestore.instance
+          .collection('marks')
+          .doc("${_selectedCourse}_${_selectedSection}_$usn")
+          .get();
+      
+      if (markDoc.exists) {
+        var data = markDoc.data() as Map<String, dynamic>;
+        String fieldName = _selectedComponent.toLowerCase();
+        if (_selectedComponent.startsWith('I')) {
+          fieldName = "internal${_selectedComponent.substring(1)}_raw";
+        } else if (_selectedComponent == 'Lab') {
+          fieldName = "lab_exam_raw";
+        } else if (_selectedComponent == 'Quiz') {
+          fieldName = "quiz_marks";
+        } else if (_selectedComponent == 'AAT') {
+          fieldName = "aat_marks";
+        } else if (_selectedComponent == 'CIE') {
+          fieldName = "cie_total";
+        } else if (_selectedComponent == 'SEE') {
+          fieldName = "see_marks";
+        }
+        newMarksMap[usn] = (data[fieldName] ?? 0.0).toDouble();
+      } else {
+        newMarksMap[usn] = 0.0;
+      }
+    }
+
+    // Sort by USN
+    var sortedKeys = newMarksMap.keys.toList()..sort();
+    Map<String, double> sortedMarks = {};
+    for (var key in sortedKeys) {
+      sortedMarks[key] = newMarksMap[key]!;
+    }
+
+    setState(() {
+      _marksMap = sortedMarks;
+      _isLoadingStudents = false;
+    });
   }
 }
 
