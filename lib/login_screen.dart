@@ -5,6 +5,7 @@ import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'user_role.dart';
 import 'student_dashboard.dart';
+import 'teacher_dashboard.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -50,8 +51,9 @@ class _LoginScreenState extends State<LoginScreen> {
               MaterialPageRoute(builder: (context) => const StudentDashboard()),
             );
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Teacher Dashboard coming soon!')),
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const TeacherDashboard()),
             );
           }
         }
