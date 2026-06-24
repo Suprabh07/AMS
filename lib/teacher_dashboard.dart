@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:intl/intl.dart';
 
 class TeacherDashboard extends StatefulWidget {
@@ -75,9 +76,20 @@ class _TeacherDashboardState extends State<TeacherDashboard> {
                 const Spacer(),
                 // Bell icon only on Home (Dashboard)
                 if (_selectedIndex == 0)
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none, size: 26, color: Colors.white),
-                    onPressed: () {},
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('teachers')
+                        .where('email', isEqualTo: FirebaseAuth.instance.currentUser?.email)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                        return TeacherNotificationIcon(teacherId: snapshot.data!.docs.first.id);
+                      }
+                      return const IconButton(
+                        icon: Icon(Icons.notifications_none, size: 26, color: Colors.white),
+                        onPressed: null,
+                      );
+                    },
                   )
                 else
                   const SizedBox(width: 48),
@@ -1400,6 +1412,192 @@ class _TeacherProfileState extends State<TeacherProfile> {
           const Divider(thickness: 1),
         ],
       ),
+    );
+  }
+}
+
+class TeacherNotificationIcon extends StatefulWidget {
+  final String teacherId;
+  const TeacherNotificationIcon({super.key, required this.teacherId});
+
+  @override
+  State<TeacherNotificationIcon> createState() => _TeacherNotificationIconState();
+}
+
+class _TeacherNotificationIconState extends State<TeacherNotificationIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _wiggleAnimation;
+  bool _hasWarning = false;
+  List<Map<String, dynamic>> _lowAttendanceList = [];
+  StreamSubscription? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(duration: const Duration(milliseconds: 500), vsync: this);
+    _wiggleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.1), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 0.1, end: -0.1), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -0.1, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _startMonitoring();
+  }
+
+  void _startMonitoring() {
+    _subscription = FirebaseFirestore.instance
+        .collection('teacher_mappings')
+        .where('teacher_id', isEqualTo: widget.teacherId)
+        .snapshots()
+        .listen((mappingsSnap) async {
+      
+      List<Map<String, dynamic>> alerts = [];
+      
+      for (var mapDoc in mappingsSnap.docs) {
+        var mapData = mapDoc.data() as Map<String, dynamic>;
+        String cc = mapData['course_code'];
+        String sec = mapData['section'];
+        String type = mapData['type'] ?? 'Theory';
+
+        // Get total classes for this mapping
+        var attSnap = await FirebaseFirestore.instance
+            .collection('attendance')
+            .where('cc', isEqualTo: cc)
+            .where('s', isEqualTo: sec)
+            .where('t', isEqualTo: type)
+            .get();
+        
+        if (attSnap.docs.isEmpty) continue;
+        int totalClasses = attSnap.docs.length;
+
+        // Get all students in this section
+        var scmMappings = await FirebaseFirestore.instance
+            .collection('student_course_mappings')
+            .where('course_code', isEqualTo: cc)
+            .get();
+
+        for (var scmDoc in scmMappings.docs) {
+          var scm = scmDoc.data() as Map<String, dynamic>;
+          var students = await FirebaseFirestore.instance
+              .collection('students')
+              .where('department_id', isEqualTo: scm['student_dept'])
+              .where('semester_id', isEqualTo: scm['student_sem'])
+              .where('section', isEqualTo: sec)
+              .get();
+
+          for (var sDoc in students.docs) {
+            var sData = sDoc.data() as Map<String, dynamic>;
+            String usn = sData['usn'];
+            String name = sData['name'];
+            
+            int presentCount = attSnap.docs.where((doc) {
+              var attData = doc.data() as Map<String, dynamic>;
+              return (attData['present_usns'] as List).contains(usn);
+            }).length;
+            double percentage = (presentCount / totalClasses) * 100;
+
+            if (percentage < 75) {
+              alerts.add({
+                'name': name,
+                'usn': usn,
+                'course': cc,
+                'section': sec,
+                'type': type,
+                'percentage': percentage.toStringAsFixed(1),
+              });
+            }
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _lowAttendanceList = alerts;
+          _hasWarning = alerts.isNotEmpty;
+        });
+        if (_hasWarning) _controller.repeat(reverse: true);
+        else { _controller.stop(); _controller.reset(); }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.rotate(
+          angle: _hasWarning ? _wiggleAnimation.value : 0,
+          child: Stack(
+            children: [
+              IconButton(
+                icon: Icon(
+                  _hasWarning ? Icons.notifications_active : Icons.notifications_none,
+                  color: _hasWarning ? Colors.orangeAccent : Colors.white,
+                  size: 26,
+                ),
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => TeacherNotificationsScreen(alerts: _lowAttendanceList)));
+                },
+              ),
+              if (_hasWarning)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                    child: Text(_lowAttendanceList.length.toString(), style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class TeacherNotificationsScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> alerts;
+  const TeacherNotificationsScreen({super.key, required this.alerts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Low Attendance Alerts", style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF2C3E50),
+        elevation: 0,
+      ),
+      body: alerts.isEmpty
+          ? const Center(child: Text("No critical attendance warnings."))
+          : ListView.builder(
+              padding: const EdgeInsets.all(15),
+              itemCount: alerts.length,
+              itemBuilder: (context, index) {
+                var data = alerts[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  child: ListTile(
+                    leading: const CircleAvatar(backgroundColor: Colors.red, child: Icon(Icons.warning_amber_rounded, color: Colors.white)),
+                    title: Text(data['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text("${data['usn']} | ${data['course']} (${data['type']})\nSection: ${data['section']}"),
+                    trailing: Text("${data['percentage']}%", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                    isThreeLine: true,
+                  ),
+                );
+              },
+            ),
     );
   }
 }

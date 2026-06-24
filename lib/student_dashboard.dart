@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 
 class StudentDashboard extends StatefulWidget {
@@ -50,10 +51,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
           // Persistent Header for all tabs
           Container(
             decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/Top_Background.jpg'),
-                fit: BoxFit.cover,
-              ),
+              color: Colors.white,
             ),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 10.0,
@@ -70,14 +68,31 @@ class _StudentDashboardState extends State<StudentDashboard> {
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Color(0xFF2C3E50),
                   ),
                 ),
                 const Spacer(),
                 if (_selectedIndex == 0)
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none, size: 26, color: Colors.white),
-                    onPressed: () {},
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('students')
+                        .where('email', isEqualTo: FirebaseAuth.instance.currentUser?.email)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                        var data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+                        return NotificationIcon(
+                          usn: data['usn'] ?? '',
+                          dept: data['department_id'] ?? '',
+                          sem: data['semester_id'] ?? '',
+                          section: data['section'] ?? '',
+                        );
+                      }
+                      return const IconButton(
+                        icon: Icon(Icons.notifications_none, size: 26, color: Color(0xFF2C3E50)),
+                        onPressed: null,
+                      );
+                    },
                   )
                 else
                   const SizedBox(width: 48),
@@ -145,6 +160,208 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 }
 
+class NotificationIcon extends StatefulWidget {
+  final String usn;
+  final String dept;
+  final String sem;
+  final String section;
+
+  const NotificationIcon({
+    super.key,
+    required this.usn,
+    required this.dept,
+    required this.sem,
+    required this.section,
+  });
+
+  @override
+  State<NotificationIcon> createState() => _NotificationIconState();
+}
+
+class _NotificationIconState extends State<NotificationIcon> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _wiggleAnimation;
+  late Animation<double> _scaleAnimation;
+  bool _hasWarning = false;
+  List<Map<String, dynamic>> _lowAttendanceData = [];
+  StreamSubscription? _attendanceSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+
+    _wiggleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.12), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 0.12, end: -0.12), weight: 2),
+      TweenSequenceItem(tween: Tween(begin: -0.12, end: 0.0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+
+    _listenToAttendance();
+  }
+
+  void _listenToAttendance() {
+    FirebaseFirestore.instance
+        .collection('student_course_mappings')
+        .where('student_dept', isEqualTo: widget.dept)
+        .where('student_sem', isEqualTo: widget.sem)
+        .get()
+        .then((mappingSnap) {
+      if (!mounted) return;
+      List<String> studentCourses = mappingSnap.docs.map((d) => d['course_code'] as String).toList();
+
+      _attendanceSubscription = FirebaseFirestore.instance
+          .collection('attendance')
+          .where('s', isEqualTo: widget.section)
+          .snapshots()
+          .listen((attSnap) async {
+        Map<String, Map<String, List<bool>>> stats = {};
+
+        for (var doc in attSnap.docs) {
+          String courseCode = doc['cc'];
+          if (!studentCourses.contains(courseCode)) continue;
+
+          String type = doc['t'];
+          List presentUsns = doc['present_usns'] ?? [];
+          bool isPresent = presentUsns.contains(widget.usn);
+
+          stats.putIfAbsent(courseCode, () => {});
+          stats[courseCode]!.putIfAbsent(type, () => []);
+          stats[courseCode]![type]!.add(isPresent);
+        }
+
+        List<Map<String, dynamic>> lowAtt = [];
+        bool warningFound = false;
+
+        for (var courseEntry in stats.entries) {
+          String courseCode = courseEntry.key;
+          for (var typeEntry in courseEntry.value.entries) {
+            String type = typeEntry.key;
+            List<bool> attendanceList = typeEntry.value;
+            
+            int total = attendanceList.length;
+            int present = attendanceList.where((p) => p).length;
+            double percentage = (present / total) * 100;
+
+            if (percentage < 75) {
+              warningFound = true;
+              
+              // Fetch course name for better display
+              var courseSnap = await FirebaseFirestore.instance
+                  .collection('courses')
+                  .where('course_code', isEqualTo: courseCode)
+                  .limit(1)
+                  .get();
+              
+              String courseName = courseSnap.docs.isNotEmpty 
+                  ? courseSnap.docs.first['course_name'] 
+                  : courseCode;
+
+              lowAtt.add({
+                'course': courseName,
+                'code': courseCode,
+                'type': type,
+                'percentage': percentage.toStringAsFixed(1),
+              });
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _hasWarning = warningFound;
+            _lowAttendanceData = lowAtt;
+          });
+          if (_hasWarning) {
+            _controller.repeat(reverse: true);
+          } else {
+            _controller.stop();
+            _controller.reset();
+          }
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _attendanceSubscription?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _showNotifications() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            NotificationsScreen(notifications: _lowAttendanceData),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(-1.0, 0.0);
+          const end = Offset.zero;
+          const curve = Curves.easeInOut;
+          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _hasWarning ? _scaleAnimation.value : 1.0,
+          child: Transform.rotate(
+            angle: _hasWarning ? _wiggleAnimation.value : 0,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    _hasWarning ? Icons.notifications_active : Icons.notifications_none,
+                    size: 26,
+                    color: _hasWarning ? Colors.orangeAccent : const Color(0xFF2C3E50),
+                  ),
+                  onPressed: _showNotifications,
+                ),
+                if (_hasWarning)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        _lowAttendanceData.length.toString(),
+                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class StudentHome extends StatelessWidget {
   const StudentHome({super.key});
 
@@ -167,13 +384,14 @@ class StudentHome extends StatelessWidget {
 
         var userData = snapshot.data!.docs.first.data() as Map<String, dynamic>;
         String? profileUrl = userData['profile_url'];
+        String name = userData['name'] ?? 'Student';
 
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+                padding: const EdgeInsets.all(20.0),
                 child: Row(
                   children: [
                     CircleAvatar(
@@ -186,13 +404,7 @@ class StudentHome extends StatelessWidget {
                                 width: 70,
                                 height: 70,
                                 fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A));
-                                },
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return const Center(child: CircularProgressIndicator(strokeWidth: 2));
-                                },
+                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A)),
                               )
                             : const Icon(Icons.person, size: 45, color: Color(0xFF1A5F7A)),
                       ),
@@ -202,16 +414,63 @@ class StudentHome extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(userData['name'] ?? 'Student', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
-                          const SizedBox(height: 5),
-                          Text(
-                            'USN: ${userData['usn'] ?? 'N/A'} | ${userData['department_id'] ?? 'Dept'} | Sem: ${userData['semester_id'] ?? 'N/A'} | Sec: ${userData['section'] ?? 'N/A'}',
-                            style: const TextStyle(fontSize: 15, color: Colors.black54, fontWeight: FontWeight.w500),
-                          ),
+                          Text("Welcome back,", style: TextStyle(fontSize: 14, color: Colors.grey[600])),
+                          Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
                         ],
                       ),
                     ),
                   ],
+                ),
+              ),
+              
+              // Summary Info Card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.grey.shade200),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Academic Profile", style: TextStyle(color: Color(0xFF2C3E50), fontSize: 16, fontWeight: FontWeight.bold)),
+                      Divider(color: Colors.grey.shade200, height: 25),
+                      _profileRow(Icons.fingerprint, "USN", userData['usn'] ?? 'N/A'),
+                      _profileRow(Icons.school, "Department", userData['department_id'] ?? 'N/A'),
+                      _profileRow(Icons.grid_view, "Semester & Section", "Sem ${userData['semester_id']} | Section ${userData['section']}"),
+                    ],
+                  ),
+                ),
+              ),
+              
+              const SizedBox(height: 30),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20.0),
+                child: Text("Performance Overview", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 15),
+              
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: SizedBox(
+                  height: 400, // Explicit height for the analytics view
+                  child: PerformanceScreen(
+                    usn: userData['usn'] ?? '',
+                    dept: userData['department_id'] ?? '',
+                    sem: userData['semester_id'] ?? '',
+                    section: userData['section'] ?? '',
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -219,6 +478,47 @@ class StudentHome extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _profileRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF1A5F7A), size: 18),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: Colors.black54, fontSize: 10)),
+              Text(value, style: const TextStyle(color: Color(0xFF2C3E50), fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(height: 10),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -337,16 +637,14 @@ class CourseDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Column(
         children: [
-          // Header with Image background
+          // Header with white background
           Container(
             width: double.infinity,
             decoration: const BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage('assets/Top_Background.jpg'),
-                fit: BoxFit.cover,
-              ),
+              color: Colors.white,
             ),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 10,
@@ -360,14 +658,14 @@ class CourseDetailScreen extends StatelessWidget {
                     Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C3E50)),
                           onPressed: () => Navigator.pop(context),
                         ),
                         Expanded(
                           child: Text(
                             courseName,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF2C3E50),
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
@@ -377,9 +675,12 @@ class CourseDetailScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Text(
-                      "Course Code: $courseCode",
-                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 48.0),
+                      child: Text(
+                        "Course Code: $courseCode",
+                        style: const TextStyle(color: Colors.black54, fontSize: 14),
+                      ),
                     ),
                   ],
                 ),
@@ -669,6 +970,7 @@ class AttendanceDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('attendance')
@@ -702,10 +1004,7 @@ class AttendanceDetailScreen extends StatelessWidget {
               Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/Top_Background.jpg'),
-                    fit: BoxFit.cover,
-                  ),
+                  color: Colors.white,
                 ),
                 padding: EdgeInsets.only(
                   top: MediaQuery.of(context).padding.top + 10,
@@ -719,14 +1018,14 @@ class AttendanceDetailScreen extends StatelessWidget {
                     Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white),
+                          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C3E50)),
                           onPressed: () => Navigator.pop(context),
                         ),
                         Expanded(
                           child: Text(
                             courseName,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: Color(0xFF2C3E50),
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
@@ -796,14 +1095,370 @@ class AttendanceDetailScreen extends StatelessWidget {
       children: [
         Text(
           value,
-          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Color(0xFF1A5F7A), fontSize: 18, fontWeight: FontWeight.bold),
         ),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
+          style: const TextStyle(color: Colors.black54, fontSize: 12),
         ),
       ],
     );
+  }
+}
+
+class PerformanceScreen extends StatefulWidget {
+  final String usn;
+  final String dept;
+  final String sem;
+  final String section;
+
+  const PerformanceScreen({
+    super.key,
+    required this.usn,
+    required this.dept,
+    required this.sem,
+    required this.section,
+  });
+
+  @override
+  State<PerformanceScreen> createState() => _PerformanceScreenState();
+}
+
+class _PerformanceScreenState extends State<PerformanceScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: TabBar(
+              tabs: const [
+                Tab(icon: Icon(Icons.calendar_today, size: 20), text: "Attendance"),
+                Tab(icon: Icon(Icons.assignment_turned_in, size: 20), text: "Marks"),
+              ],
+              labelColor: const Color(0xFF2C3E50),
+              unselectedLabelColor: Colors.grey,
+              indicatorColor: Colors.orangeAccent,
+              indicatorSize: TabBarIndicatorSize.label,
+              indicatorWeight: 3,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: TabBarView(
+              children: [
+                AttendanceAnalytics(usn: widget.usn, dept: widget.dept, sem: widget.sem, section: widget.section),
+                MarksAnalytics(usn: widget.usn, dept: widget.dept, sem: widget.sem, section: widget.section),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class AttendanceAnalytics extends StatelessWidget {
+  final String usn;
+  final String dept;
+  final String sem;
+  final String section;
+
+  const AttendanceAnalytics({super.key, required this.usn, required this.dept, required this.sem, required this.section});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('student_course_mappings')
+          .where('student_dept', isEqualTo: dept)
+          .where('student_sem', isEqualTo: sem)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        var courses = snapshot.data!.docs.map((d) => d['course_code'] as String).toList();
+        
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchAllAttendance(courses),
+          builder: (context, attSnapshot) {
+            if (!attSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+            var data = attSnapshot.data!;
+
+            if (data.isEmpty) return const Center(child: Text("No attendance data available"));
+
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  const Text("Subject-wise Attendance (%)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+                  const SizedBox(height: 30),
+                  Expanded(
+                    child: BarChart(
+                      BarChartData(
+                        alignment: BarChartAlignment.spaceAround,
+                        maxY: 100,
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) => const Color(0xFF2C3E50),
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                "${data[groupIndex]['code']}\n",
+                                const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                children: [
+                                  TextSpan(
+                                    text: "${rod.toY.toStringAsFixed(1)}%",
+                                    style: const TextStyle(color: Colors.orangeAccent, fontSize: 16, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                if (value.toInt() >= data.length) return const Text("");
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 12.0),
+                                  child: Transform.rotate(
+                                    angle: -0.5,
+                                    child: Text(
+                                      data[value.toInt()]['code'],
+                                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        gridData: const FlGridData(show: true, drawVerticalLine: false),
+                        borderData: FlBorderData(show: false),
+                        barGroups: data.asMap().entries.map((entry) {
+                          int idx = entry.key;
+                          double percentage = entry.value['percentage'];
+                          return BarChartGroupData(
+                            x: idx,
+                            barRods: [
+                              BarChartRodData(
+                                toY: percentage,
+                                color: percentage < 75 ? Colors.red : const Color(0xFF3B82F6),
+                                width: 20,
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildLegend(Colors.red, "Below 75%"),
+                  _buildLegend(const Color(0xFF3B82F6), "Above 75%"),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAllAttendance(List<String> courses) async {
+    try {
+      var snap = await FirebaseFirestore.instance
+          .collection('attendance')
+          .where('s', isEqualTo: section)
+          .where('cc', whereIn: courses)
+          .get();
+
+      Map<String, List<DocumentSnapshot>> grouped = {};
+      for (var doc in snap.docs) {
+        String code = doc.get('cc');
+        grouped.putIfAbsent(code, () => []).add(doc);
+      }
+
+      return courses.map((code) {
+        var docs = grouped[code] ?? [];
+        if (docs.isEmpty) return {'code': code, 'percentage': 0.0};
+        
+        int total = docs.length;
+        int present = docs.where((doc) {
+          List presentUsns = doc.get('present_usns') ?? [];
+          return presentUsns.contains(usn);
+        }).length;
+
+        return {
+          'code': code,
+          'percentage': (present / total) * 100,
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint("Error fetching attendance: $e");
+      return [];
+    }
+  }
+
+  Widget _buildLegend(Color color, String text) {
+    return Row(
+      children: [
+        Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 8),
+        Text(text, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+      ],
+    );
+  }
+}
+
+class MarksAnalytics extends StatelessWidget {
+  final String usn;
+  final String dept;
+  final String sem;
+  final String section;
+
+  const MarksAnalytics({super.key, required this.usn, required this.dept, required this.sem, required this.section});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('student_course_mappings')
+          .where('student_dept', isEqualTo: dept)
+          .where('student_sem', isEqualTo: sem)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        var courses = snapshot.data!.docs.map((d) => d['course_code'] as String).toList();
+
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchAllMarks(courses),
+          builder: (context, marksSnapshot) {
+            if (!marksSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+            var data = marksSnapshot.data!;
+
+            if (data.isEmpty) return const Center(child: Text("No marks data available"));
+
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  const Text("Final CIE Marks (out of 50)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+                  const SizedBox(height: 30),
+                  Expanded(
+                    child: BarChart(
+                      BarChartData(
+                        groupsSpace: 20,
+                        alignment: BarChartAlignment.center,
+                        maxY: 50,
+                        barTouchData: BarTouchData(
+                          touchTooltipData: BarTouchTooltipData(
+                            getTooltipColor: (_) => const Color(0xFF2C3E50),
+                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                              return BarTooltipItem(
+                                "${data[groupIndex]['code']}\n",
+                                const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                children: [
+                                  TextSpan(
+                                    text: "${rod.toY.toStringAsFixed(1)} / 50",
+                                    style: const TextStyle(color: Colors.orangeAccent, fontSize: 16, fontWeight: FontWeight.w500),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(
+                              showTitles: true,
+                              getTitlesWidget: (value, meta) {
+                                if (value.toInt() >= data.length) return const Text("");
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 12.0),
+                                  child: Transform.rotate(
+                                    angle: -0.5,
+                                    child: Text(
+                                      data[value.toInt()]['code'],
+                                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 30)),
+                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        ),
+                        gridData: const FlGridData(show: true, drawVerticalLine: false),
+                        borderData: FlBorderData(show: false),
+                        barGroups: data.asMap().entries.map((entry) {
+                          int idx = entry.key;
+                          double cie = entry.value['cie'];
+                          return BarChartGroupData(
+                            x: idx,
+                            barRods: [
+                              BarChartRodData(
+                                toY: cie,
+                                color: const Color(0xFFF59E0B),
+                                width: 20,
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text("Target: Minimum 20/50 required to pass CIE", style: TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic)),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAllMarks(List<String> courses) async {
+    try {
+      var snap = await FirebaseFirestore.instance
+          .collection('marks')
+          .where('student_id', isEqualTo: usn)
+          .where('section', isEqualTo: section)
+          .where('course_id', whereIn: courses)
+          .get();
+
+      Map<String, dynamic> marksMap = {
+        for (var doc in snap.docs) doc.get('course_id'): doc.data()
+      };
+
+      return courses.map((code) {
+        var data = marksMap[code];
+        return {
+          'code': code,
+          'cie': (data?['cie_total'] ?? 0.0).toDouble(),
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint("Error fetching marks: $e");
+      return [];
+    }
   }
 }
 
@@ -1039,6 +1694,8 @@ class StudentMarks extends StatelessWidget {
 }
 
 
+
+
 class StudentProfile extends StatefulWidget {
   const StudentProfile({super.key});
 
@@ -1251,3 +1908,119 @@ class _StudentProfileState extends State<StudentProfile> {
     );
   }
 }
+
+
+
+class NotificationsScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> notifications;
+
+  const NotificationsScreen({super.key, required this.notifications});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Notifications", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2C3E50))),
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Color(0xFF2C3E50)),
+          onPressed: () => Navigator.pop(context),
+        ),
+        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1.0),
+          child: Divider(color: Colors.grey.shade200, height: 1.0),
+        ),
+      ),
+      body: notifications.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.notifications_off_outlined, size: 80, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text("No new notifications", style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: notifications.length,
+              itemBuilder: (context, index) {
+                var data = notifications[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: IntrinsicHeight(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            color: Colors.red,
+                          ),
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        "Low Attendance Warning",
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    "${data['course']}",
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: Color(0xFF1E293B),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Your ${data['type']} attendance is currently ${data['percentage']}%. A minimum of 75% is required.",
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+
