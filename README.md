@@ -17,8 +17,6 @@
     <a href="#-key-features"><strong>Explore the features »</strong></a>
     <br />
     <br />
-    <a href="#-interface-preview">View Demo</a>
-    ·
     <a href="https://github.com/Suprabh07/AMS/issues">Report Bug</a>
     ·
     <a href="https://github.com/Suprabh07/AMS/issues">Request Feature</a>
@@ -33,9 +31,7 @@
   - [👨‍🎓 Student Experience](#-student-experience)
   - [👩‍🏫 Teacher Power-Tools](#-teacher-power-tools)
 - [🛠 Tech Stack](#-tech-stack)
-- [📱 Interface Preview](#-interface-preview)
 - [📂 Project Structure](#-project-structure)
-- [📊 Data Architecture](#-data-architecture)
 - [⚙️ Setup & Installation](#-setup--installation)
 - [🛡️ Security & Privacy](#-security--privacy)
 - [📄 License](#-license)
@@ -44,30 +40,25 @@
 
 ## 🌟 Overview
 
-The **BMSCE AMS** is not just an attendance tracker; it's a comprehensive academic companion. Designed specifically for the **BMS College of Engineering** ecosystem, it streamlines the complex processes of attendance marking, CIE (Continuous Internal Evaluation) calculations, and student-teacher data synchronization.
-
-> **Why BMSCE AMS?** 
-> Manual attendance and CIE calculation are prone to errors and time-consuming. This system provides a **single source of truth** with automated logic that ensures 100% accuracy in "Best-of-2" internal scores and attendance percentages.
+The **BMSCE AMS** is a comprehensive academic companion designed specifically for the **BMS College of Engineering** ecosystem. It streamlines the complex processes of attendance marking, CIE (Continuous Internal Evaluation) calculations, and real-time student-teacher data synchronization.
 
 ---
 
 ## ✨ Key Features
 
+### 🛡️ App Security
+- **🔐 Biometric Guard:** Fingerprint and Face ID integration to protect academic data every time the app is opened or resumed from the background.
+- **📧 Domain Verification:** Signup restricted exclusively to `@bmsce.ac.in` email addresses.
+
 ### 👨‍🎓 Student Experience
-- **⚡ Real-time Dashboard:** Instant overview of attendance status across all courses.
-- **📊 Smart Analytics:** Color-coded progress indicators (Green ≥75%, Red <75%) to help students stay on track.
-- **📅 Session Transparency:** Detailed view of every record—know exactly when you were present or absent.
-- **👤 Profile Hub:** Self-service profile management with secure cloud-synced image storage.
-- **🔑 Secure Access:** Authenticated login restricted to official `@bmsce.ac.in` domains.
+- **📊 Interactive Analytics:** Visualized attendance and marks trends using dynamic charts (`fl_chart`).
+- **⚠️ Low Attendance Alerts:** Smart notification system that alerts students if their attendance drops below the mandatory 75%.
+- **📅 Detailed Logs:** Transparent view of every attendance record with precise timestamps and session types.
 
 ### 👩‍🏫 Teacher Power-Tools
-- **🎯 Precision Marking:** Optimized interface for marking attendance of entire sections in seconds.
-- **🔢 Automated CIE Engine:** 
-  - Effortless entry for **Internals (I1, I2, I3), Quizzes, and AAT**.
-  - Built-in logic for **Best-of-2** calculation and final CIE aggregation.
-- **🛑 Intelligent Guards:** Real-time validation prevents data entry errors—automatic warnings if marks exceed thresholds.
-- **📝 Total Control:** Full flexibility to view, edit, or delete historical attendance records.
-- **🗺️ Tailored View:** Zero-clutter experience—teachers only see the specific sections and courses they handle.
+- **🎯 One-Tap Marking:** Optimized UI for marking attendance of entire sections in seconds with "Mark All" capabilities.
+- **🛑 Proactive Monitoring:** Real-time notification badge that alerts faculty whenever a student in their course falls below 75% attendance.
+- **🔢 Automated CIE Engine:** Effortless entry for Internals, Quizzes, AAT, and Lab Exams with automated Best-of-2 logic.
 
 ---
 
@@ -75,33 +66,11 @@ The **BMSCE AMS** is not just an attendance tracker; it's a comprehensive academ
 
 | Layer | Technology | Role |
 | :--- | :--- | :--- |
-| **Frontend** | **Flutter & Material 3** | Cross-platform UI with modern aesthetics |
-| **Backend** | **Firebase Firestore** | Real-time NoSQL cloud database |
-| **Auth** | **Firebase Auth** | Secure student/teacher identity management |
-| **Storage** | **Cloud Storage** | Scalable hosting for profile assets |
-| **Logic** | **Dart** | High-performance business logic |
-
----
-
-## 📱 Interface Preview
-
-<div align="center">
-  <table style="border: none;">
-    <tr>
-      <td align="center"><b>Modern Login</b></td>
-      <td align="center"><b>Student Dashboard</b></td>
-      <td align="center"><b>Attendance History</b></td>
-      <td align="center"><b>Teacher Tools</b></td>
-    </tr>
-    <tr>
-      <td><img src="https://via.placeholder.com/200x400?text=Login+UI" width="180" style="border-radius: 15px;"></td>
-      <td><img src="https://via.placeholder.com/200x400?text=Dashboard+UI" width="180" style="border-radius: 15px;"></td>
-      <td><img src="https://via.placeholder.com/200x400?text=History+UI" width="180" style="border-radius: 15px;"></td>
-      <td><img src="https://via.placeholder.com/200x400?text=Teacher+UI" width="180" style="border-radius: 15px;"></td>
-    </tr>
-  </table>
-  <p><i>(Visualizing the future of BMSCE Academic Management)</i></p>
-</div>
+| **Frontend** | **Flutter & Material 3** | Modern UI/UX |
+| **Backend** | **Firebase Firestore** | Real-time NoSQL database |
+| **Auth** | **Firebase Auth** | Secure identity management |
+| **Biometrics** | **Local Auth** | Hardware-level security |
+| **Charts** | **FL Chart** | Data visualization |
 
 ---
 
@@ -109,39 +78,22 @@ The **BMSCE AMS** is not just an attendance tracker; it's a comprehensive academ
 
 ```bash
 lib/
-├── main.dart                # System entry & Auth orchestration
-├── login_screen.dart        # Multi-role secure gateway
-├── student_dashboard.dart   # Interactive hub for student tools
-├── teacher_dashboard.dart   # Attendance & CIE Management engine
-├── user_role.dart           # Permission & Role definitions
-└── firebase_options.dart    # Cloud configuration (Secure)
+├── main.dart                # Biometric Guard & Entry Point
+├── login_screen.dart        # Secure Multi-role Gateway
+├── signup_screen.dart       # Verified Registration
+├── student_dashboard.dart   # Student Hub & Analytics
+├── teacher_dashboard.dart   # Attendance & CIE Management
+├── user_role.dart           # Permission definitions
+└── firebase_options.dart    # Cloud configuration
 ```
-
----
-
-## 📊 Data Architecture
-
-<details>
-<summary>🔍 <b>Explore the Firestore Schema</b></summary>
-
-The system utilizes a flat, highly-indexed NoSQL structure:
-
-- **`students`**: USN-keyed records for rapid profile retrieval.
-- **`teachers`**: Department-specific educator metadata.
-- **`courses`**: Academic catalog including credit weightage and lab status.
-- **`attendance`**: Daily session logs with atomic USN list updates.
-- **`marks`**: Multi-component performance records with automated reduction fields.
-- **`teacher_mappings`**: Secure authorization links for classroom management.
-
-</details>
 
 ---
 
 ## ⚙️ Setup & Installation
 
 ### 1️⃣ Environment Prep
-- Install [Flutter SDK](https://docs.flutter.dev/get-started/install) (Stable)
-- Configure [Firebase Project](https://console.firebase.google.com/)
+- Install [Flutter SDK](https://docs.flutter.dev/get-started/install)
+- Configure a [Firebase Project](https://console.firebase.google.com/)
 
 ### 2️⃣ Quick Start
 ```bash
@@ -151,9 +103,6 @@ git clone https://github.com/Suprabh07/AMS.git
 # Install dependencies
 flutter pub get
 
-# Setup Firebase (requires FlutterFire CLI)
-flutterfire configure
-
 # Run on your device
 flutter run
 ```
@@ -161,14 +110,14 @@ flutter run
 ---
 
 ## 🛡️ Security & Privacy
-- **Domain Locking:** Access is strictly limited to verified institution email domains.
-- **Role Isolation:** Built-in middleware ensures teachers cannot access student-only views and vice versa.
-- **Secure Storage:** sensitive keys are managed via local properties and excluded from public version control.
+- **Hardware-Level Security:** Biometric data never leaves the device.
+- **Role Isolation:** Students cannot access teacher-only functions and vice-versa.
+- **Data Integrity:** Marks entry is limited to authorized faculty members.
 
 ---
 
 ## 📄 License
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License**.
 
 ---
 
