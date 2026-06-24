@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/logo.png" alt="BMSCE AMS Logo" width="160" height="160">
   
-  # 🚀 BMSCE Attendance Management System (AMS)
+  #  BMSCE Attendance Management System (AMS)
   
   ### *Digitalizing the Academic Pulse of BMS College of Engineering*
   
