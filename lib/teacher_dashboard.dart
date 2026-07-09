@@ -770,6 +770,15 @@ class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClie
   final List<String> _nonLabComponents = ['I1', 'I2', 'I3', 'Quiz', 'AAT', 'CIE', 'SEE'];
   final List<String> _labComponents = ['I1', 'I2', 'I3', 'Lab', 'AAT', 'CIE', 'SEE'];
 
+  String _getGradeFromTotal(double total) {
+    if (total >= 90) return 'O';
+    if (total >= 80) return 'A+';
+    if (total >= 70) return 'A';
+    if (total >= 60) return 'B+';
+    if (total >= 50) return 'B';
+    return 'F';
+  }
+
   Future<void> _saveMarks() async {
     if (_selectedCourse == null || _selectedSection == null) return;
 
@@ -793,6 +802,35 @@ class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClie
     }
 
     try {
+      Map<String, double> cieMap = {};
+      if (_selectedComponent == 'SEE') {
+        var scmMappings = await FirebaseFirestore.instance
+            .collection('student_course_mappings')
+            .where('course_code', isEqualTo: _selectedCourse)
+            .get();
+        
+        for (var mappingDoc in scmMappings.docs) {
+          var mData = mappingDoc.data();
+          var students = await FirebaseFirestore.instance
+              .collection('students')
+              .where('department_id', isEqualTo: mData['student_dept'])
+              .where('semester_id', isEqualTo: mData['student_sem'])
+              .where('section', isEqualTo: _selectedSection)
+              .get();
+          
+          for (var sDoc in students.docs) {
+            String usn = sDoc.get('usn');
+            var mDoc = await FirebaseFirestore.instance
+                .collection('marks')
+                .doc("${_selectedCourse}_${_selectedSection}_$usn")
+                .get();
+            if (mDoc.exists) {
+              cieMap[usn] = (mDoc.get('cie_total') ?? 0.0).toDouble();
+            }
+          }
+        }
+      }
+
       WriteBatch batch = FirebaseFirestore.instance.batch();
       
       for (var entry in _marksMap.entries) {
@@ -823,6 +861,12 @@ class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClie
           fieldName = "cie_total";
         } else if (_selectedComponent == 'SEE') {
           fieldName = "see_marks";
+          
+          // Calculate final grade
+          double cie = cieMap[usn] ?? 0.0;
+          double total = cie + (mark / 2.0); // SEE is out of 100, reduced to 50
+          dataToSave['total_marks'] = double.parse(total.toStringAsFixed(2));
+          dataToSave['grade'] = _getGradeFromTotal(total);
         }
             
         dataToSave[fieldName] = mark;
@@ -892,11 +936,13 @@ class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClie
         double roundedCie = double.parse(finalCie.toStringAsFixed(2));
         calculatedCIE[usn] = roundedCie;
 
-        // Update full record with calculated fields
         await FirebaseFirestore.instance
             .collection('marks')
             .doc("${_selectedCourse}_${_selectedSection}_$usn")
-            .update({
+            .set({
+          'course_id': _selectedCourse,
+          'section': _selectedSection,
+          'student_id': usn,
           'internal1_reduced': i1Red,
           'internal2_reduced': i2Red,
           'internal3_reduced': i3Red,
@@ -905,7 +951,8 @@ class _TeacherMarksState extends State<TeacherMarks> with AutomaticKeepAliveClie
           'best_two_total': bestTwoTotal,
           'lab_exam_reduced': _hasLab ? labRed : 0.0,
           'cie_total': roundedCie,
-        });
+          'last_updated': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       } else {
         calculatedCIE[usn] = 0.0;
       }

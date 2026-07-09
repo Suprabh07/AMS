@@ -1561,16 +1561,35 @@ class StudentMarks extends StatelessWidget {
                                     ],
                                   ),
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1A5F7A),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    "CIE: $cieTotal/50",
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    if (marks.containsKey('grade')) ...[
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orangeAccent,
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          "Grade: ${marks['grade']}",
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                    ],
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1A5F7A),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Text(
+                                        "CIE: $cieTotal/50",
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -1645,17 +1664,29 @@ class StudentMarks extends StatelessWidget {
                                     if (marks.containsKey('see_marks')) ...[
                                       const SizedBox(height: 15),
                                       Container(
-                                        padding: const EdgeInsets.all(10),
+                                        padding: const EdgeInsets.all(12),
                                         decoration: BoxDecoration(
-                                          color: Colors.green.withAlpha(20),
-                                          borderRadius: BorderRadius.circular(10),
-                                          border: Border.all(color: Colors.green.withAlpha(50)),
+                                          color: Colors.blue.withAlpha(20),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.blue.withAlpha(50)),
                                         ),
-                                        child: Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        child: Column(
                                           children: [
-                                            const Text("Semester End Exam (SEE)", style: TextStyle(fontWeight: FontWeight.bold)),
-                                            Text("${marks['see_marks']}/100", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                const Text("Semester End Exam (SEE)", style: TextStyle(fontWeight: FontWeight.w600)),
+                                                Text("${marks['see_marks']}/100", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                                              ],
+                                            ),
+                                            const Divider(height: 20),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                const Text("Total (CIE + SEE/2)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                                Text("${marks['total_marks'] ?? '--'}/100", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF1A5F7A))),
+                                              ],
+                                            ),
                                           ],
                                         ),
                                       ),
